@@ -1,0 +1,28 @@
+services:
+	agent:
+		build:
+			context: .
+			target: runtime
+		image: swarm-graph:latest
+		container_name: swarm-graph-agent
+		restart: unless-stopped
+		ports:
+			- "9123:9123"
+		environment:
+			- LOG_LEVEL=INFO
+
+	agent-dev:
+		build:
+			context: .
+			target: dev
+		image: swarm-graph:dev
+		container_name: swarm-graph-agent-dev
+		volumes:
+			- ./:/app:cached
+			- /var/run/docker.sock:/var/run/docker.sock # give container access to host docker
+		ports:
+			- "9123:9123"
+		environment:
+			- LOG_LEVEL=DEBUG
+		tty: true
+		stdin_open: true

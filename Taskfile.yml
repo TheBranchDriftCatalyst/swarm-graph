@@ -1,0 +1,71 @@
+version: "3"
+
+tasks:
+
+  # Get all missing dependencies based on imports
+  deps:
+    desc: Download all required dependencies for the module
+    cmds:
+    - go get ./...
+
+  # Clean up go.mod and go.sum
+  tidy:
+    desc: Add missing and remove unused dependencies
+    cmds:
+    - go mod tidy
+
+  # Full dependency refresh: get and tidy
+  refresh:
+    desc: Fetch missing deps and tidy up
+    cmds:
+    - task: deps
+    - task: tidy
+
+  # Build the agent binary
+  build:
+    desc: Build the agent
+    cmds:
+    - mkdir -p bin
+    # TODO: add release management here
+    - go build -o bin/agent ./cmd/agent
+
+  # release:
+
+  # Run the agent directly
+  run:
+    desc: Run the agent
+    cmds:
+    - go run ./cmd/agent/main.go
+
+  # Run with live reload (air)
+  dev:
+    desc: Run with live reload (air)
+    cmds:
+    - mkdir -p bin
+    - air
+
+  # Docker helper tasks
+  docker:build:
+    desc: Build the production Docker image
+    cmds:
+    - docker build -t swarm-graph:latest .
+
+  docker:up:
+    desc: Start compose (production)
+    cmds:
+    - docker compose up --build -d
+
+  docker:down:
+    desc: Stop compose
+    cmds:
+    - docker compose down
+
+  docker:dev:up:
+    desc: Start the dev compose service (mounts source and runs air)
+    cmds:
+    - docker compose up --build agent-dev
+
+  docker:dev:down:
+    desc: Stop the dev compose services
+    cmds:
+    - docker compose down

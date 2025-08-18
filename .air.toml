@@ -1,0 +1,27 @@
+#:schema ./etc/.air.schema.json
+# https://github.com/air-verse/air/blob/master/air_example.toml
+root = "."
+
+[build]
+  # Compile the agent
+  cmd = "go build -o bin/agent ./cmd/agent"
+  # Path to the built binary (Air will execute this file)
+  bin = "./bin/agent"
+
+  # Full command to run the binary with env wrapper (optional)
+  full_bin = "env LOG_LEVEL=DEBUG ./bin/agent"
+
+  # Watch only Go source files
+  include_ext = ["go"]
+
+  # Ignore build / vendor / tmp dirs
+  exclude_dir = ["bin", "vendor", "tmp", "etc"]
+
+  # Debounce rebuilds (ms)
+  delay = 1000
+
+[log]
+  # Air’s own log settings
+  # level = "debug"   # <- this sets Air’s log verbosity
+  # color = "auto"
+  time = true

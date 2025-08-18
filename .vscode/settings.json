@@ -1,0 +1,17 @@
+{
+    "go.goroot": "/Users/panda/.local/share/mise/installs/go/1.22.1",
+    "debug.javascript.defaultRuntimeExecutable": {
+        "pwa-node": "/Users/panda/.local/share/mise/shims/node"
+    },
+    "python.defaultInterpreterPath": "/Users/panda/.local/share/mise/installs/python/3.12.6/bin/python",
+    "go.alternateTools": {
+        "go": "/Users/panda/.local/share/mise/shims/go"
+    },
+    "yaml.schemas": {
+      "https://www.artillery.io/schema.json": []
+    },
+    "evenBetterToml.schema.associations": {
+      // https://github.com/air-verse/air/blob/master/air_example.toml
+      "**/air.toml": "./.air.schema.json"
+    }
+}

@@ -1,0 +1,229 @@
+{
+  "$id": "https://example.com/schemas/air.toml.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Air (air-verse/air) TOML config",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "root": {
+      "type": "string",
+      "description": "Working directory. '.' or absolute path; subsequent directories must be under this root."
+    },
+    "tmp_dir": {
+      "type": "string",
+      "description": "Temporary directory path, relative to root unless absolute."
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pre_cmd": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Commands to run before each build."
+        },
+        "cmd": {
+          "type": "string",
+          "description": "Shell command that builds the binary."
+        },
+        "post_cmd": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Commands to run on interrupt (^C)."
+        },
+        "bin": {
+          "type": "string",
+          "description": "Path to the built binary (output of cmd)."
+        },
+        "full_bin": {
+          "type": "string",
+          "description": "Command to run the app with environment variables."
+        },
+        "args_bin": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Extra arguments when running bin/full_bin."
+        },
+        "include_ext": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[^.].*$" },
+          "description": "File extensions to watch (without leading dot)."
+        },
+        "exclude_dir": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directory names to ignore."
+        },
+        "include_dir": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Directories to include explicitly."
+        },
+        "include_file": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific files to include."
+        },
+        "exclude_file": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Specific files to exclude."
+        },
+        "exclude_regex": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Regex patterns for files to exclude (string form, not TOML regex type)."
+        },
+        "exclude_unchanged": {
+          "type": "boolean",
+          "description": "Ignore unchanged files."
+        },
+        "follow_symlink": {
+          "type": "boolean",
+          "description": "Follow directory symlinks."
+        },
+        "log": {
+          "type": "string",
+          "description": "Log file path (relative to tmp_dir unless absolute)."
+        },
+        "poll": {
+          "type": "boolean",
+          "description": "Use polling instead of fsnotify."
+        },
+        "poll_interval": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Polling interval in milliseconds (>= 500ms typically)."
+        },
+        "delay": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Debounce delay before triggering rebuild (ms)."
+        },
+        "stop_on_error": {
+          "type": "boolean",
+          "description": "Stop running old binary when build errors occur."
+        },
+        "send_interrupt": {
+          "type": "boolean",
+          "description": "Send SIGINT before killing process (not supported on Windows)."
+        },
+        "kill_delay": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Delay after sending SIGINT (nanoseconds)."
+        },
+        "rerun": {
+          "type": "boolean",
+          "description": "Rerun binary automatically."
+        },
+        "rerun_delay": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Delay between runs (ms)."
+        }
+      }
+    },
+    "log": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "time": {
+          "type": "boolean",
+          "description": "Include timestamps in logs."
+        },
+        "main_only": {
+          "type": "boolean",
+          "description": "Show only main log (silences watcher/build/runner)."
+        },
+        "silent": {
+          "type": "boolean",
+          "description": "Silence all logs produced by Air."
+        }
+      }
+    },
+    "color": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "main": { "$ref": "#/$defs/colorName" },
+        "watcher": { "$ref": "#/$defs/colorName" },
+        "build": { "$ref": "#/$defs/colorName" },
+        "runner": { "$ref": "#/$defs/colorName" }
+      },
+      "description": "ANSI color names for each component; raw app logs are used if unspecified."
+    },
+    "misc": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clean_on_exit": {
+          "type": "boolean",
+          "description": "Delete tmp directory on exit."
+        }
+      }
+    },
+    "screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clear_on_rebuild": {
+          "type": "boolean",
+          "description": "Clear screen on rebuild."
+        },
+        "keep_scroll": {
+          "type": "boolean",
+          "description": "Keep scrollback."
+        }
+      }
+    },
+    "proxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable browser live-reloading proxy."
+        },
+        "proxy_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Proxy port to serve live reload."
+        },
+        "app_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Your app's port; proxy forwards to this."
+        }
+      }
+    }
+  },
+  "$defs": {
+    "colorName": {
+      "type": "string",
+      "enum": [
+        "black",
+        "red",
+        "green",
+        "yellow",
+        "blue",
+        "magenta",
+        "cyan",
+        "white",
+        "reset",
+        "bold",
+        "gray",
+        "brightRed",
+        "brightGreen",
+        "brightYellow",
+        "brightBlue",
+        "brightMagenta",
+        "brightCyan",
+        "brightWhite"
+      ],
+      "description": "Common ANSI color tokens. If your Air build supports additional names, extend this list."
+    }
+  }
+}
