@@ -1,11 +1,12 @@
 {
-    "go.goroot": "/Users/panda/.local/share/mise/installs/go/1.22.1",
+    "go.goroot": "/Users/panda/.local/share/mise/installs/go/1.23.0",
     "debug.javascript.defaultRuntimeExecutable": {
         "pwa-node": "/Users/panda/.local/share/mise/shims/node"
     },
     "python.defaultInterpreterPath": "/Users/panda/.local/share/mise/installs/python/3.12.6/bin/python",
     "go.alternateTools": {
-        "go": "/Users/panda/.local/share/mise/shims/go"
+      "go": "/Users/panda/.local/share/mise/shims/go",
+      "dlv": "/Users/panda/.local/share/mise/shims/dlv"
     },
     "yaml.schemas": {
       "https://www.artillery.io/schema.json": []

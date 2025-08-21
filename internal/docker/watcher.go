@@ -34,7 +34,7 @@ var reAnonVol = regexp.MustCompile(`^[a-f0-9]{64}$`)
 
 type Watcher struct {
 	cli      *client.Client
-	store    *store.MemoryStore
+	store    store.Store
 	log      *slog.Logger
 	opts     Options
 	workCh   chan workItem
@@ -53,7 +53,7 @@ type Options struct {
 	EventDebugSampleN int // sample 1/N debug events; 0 disables debug logs
 }
 
-func NewWatcher(store *store.MemoryStore, optFns ...func(*Options)) (*Watcher, error) {
+func NewWatcher(store store.Store, optFns ...func(*Options)) (*Watcher, error) {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		return nil, err
