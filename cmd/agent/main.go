@@ -27,7 +27,12 @@ func main() {
   go func() {
 		srv := &http.Server{
 			Addr:    ":9123",
-			Handler: httpapi.Handler(st),
+			Handler:      httpapi.Handler(st, func(o *httpapi.Options) {
+        o.Logger = slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+            Level: slog.LevelInfo, AddSource: true,
+        }))
+        // o.KrokiURL = "http://kroki:8000" // if self-hosted in docker-compose
+    }),
 		}
 		logger.Info("serving HTTP", "addr", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

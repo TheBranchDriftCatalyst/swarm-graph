@@ -32,4 +32,12 @@ services:
   dummy01:
     image: alpine:latest
     command: ["sh", "-c", "while true; do echo 'Dummy service running'; sleep 5; done"]
-    
+  
+  kroki:
+    image: yuzutech/kroki
+    ports: ["8000:8000"]
+  swarm-graph:
+    build: .
+    environment:
+      KROKI_URL: http://kroki:8000
+    depends_on: [kroki]
