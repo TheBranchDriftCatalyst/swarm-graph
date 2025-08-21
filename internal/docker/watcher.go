@@ -225,6 +225,7 @@ func (w *Watcher) snapshot(ctx context.Context) error {
                 Attributes: map[string]string{
                     "driver":     v.Driver,
                     "mountpoint": v.Mountpoint,
+						"status":     "available",
                 },
             })
         }
@@ -323,32 +324,41 @@ func (w *Watcher) inspectContainer(ctx context.Context, id string, log *slog.Log
     name := friendlyContainerName(info.ID, info.Name, stack, svc)
 
     w.store.Mutate(func(g *model.InfraGraph) {
-        g.UpsertNode(model.Node{
-            ID:   info.ID,
-            Kind: model.NodeContainer,
-            Name: name,
-            Attributes: map[string]string{
-                "image":   info.Image,
-                "status":  info.State.Status,
-                "created": info.Created,
-                "stack":   stack,
-                "service": svc,
-            },
-        })
+		// derived_from
+		imgID := info.Image // image ID like sha256:...
+		// Resolve a friendly image name to attach to the container (prefer image node name)
+		imgName := info.Image
+		if imgID != "" {
+			if in, ok := g.Nodes[imgID]; ok {
+				imgName = nameOrShortID(in.Name, imgID)
+			} else if len(info.Image) > 12 {
+				imgName = info.Image[:12]
+			}
+		}
+		g.UpsertNode(model.Node{
+			ID:   info.ID,
+			Kind: model.NodeContainer,
+			Name: name,
+			Attributes: map[string]string{
+				"image":   imgName,
+				"status":  info.State.Status,
+				"created": info.Created,
+				"stack":   stack,
+				"service": svc,
+			},
+		})
 
         // Rewire edges for this container (prune first)
         g.RemoveEdgesWhere(func(e model.Edge) bool { return e.Src == info.ID || e.Dst == info.ID })
 
         edgeCount := 0
 
-        // derived_from
-        imgID := info.Image // image ID like sha256:...
-        if imgID != "" {
-            if _, ok := g.Nodes[imgID]; ok {
-                g.AddEdge(model.Edge{Src: info.ID, Dst: imgID, Kind: model.EdgeDerivedFrom})
-                edgeCount++
-            }
-        }
+		if imgID != "" {
+			if _, ok := g.Nodes[imgID]; ok {
+				g.AddEdge(model.Edge{Src: info.ID, Dst: imgID, Kind: model.EdgeDerivedFrom})
+				edgeCount++
+			}
+		}
 
         // connected_to
         for nwName, ep := range info.NetworkSettings.Networks {
@@ -374,18 +384,25 @@ func (w *Watcher) inspectContainer(ctx context.Context, id string, log *slog.Log
         // mounted_into
         for _, m := range info.Mounts {
             if m.Type == mount.TypeVolume && m.Name != "" {
-                if _, ok := g.Nodes[m.Name]; ok {
-                    g.AddEdge(model.Edge{
-                        Src:  m.Name,
-                        Dst:  info.ID,
-                        Kind: model.EdgeMountedInto,
-                        Attributes: map[string]string{
-                            "target": m.Destination,
-                            "rw":     boolStr(m.RW),
-                        },
-                    })
-                    edgeCount++
-                }
+				if _, ok := g.Nodes[m.Name]; ok {
+					// Mark the volume as in-use
+					v := g.Nodes[m.Name]
+					if v.Attributes == nil {
+						v.Attributes = make(map[string]string)
+					}
+					v.Attributes["status"] = "in-use"
+					g.UpsertNode(v)
+					g.AddEdge(model.Edge{
+						Src:  m.Name,
+						Dst:  info.ID,
+						Kind: model.EdgeMountedInto,
+						Attributes: map[string]string{
+							"target": m.Destination,
+							"rw":     boolStr(m.RW),
+						},
+					})
+					edgeCount++
+				}
             }
         }
 
@@ -453,15 +470,22 @@ func (w *Watcher) inspectVolume(ctx context.Context, name string, log *slog.Logg
         return
     }
     w.store.Mutate(func(g *model.InfraGraph) {
-        g.UpsertNode(model.Node{
-            ID:   vol.Name,
-            Kind: model.NodeVolume,
-            Name: friendlyVolumeName(vol.Name, vol.Mountpoint),
-            Attributes: map[string]string{
-                "driver":     vol.Driver,
-                "mountpoint": vol.Mountpoint,
-            },
-        })
+		status := "available"
+		if vol.UsageData != nil {
+			if vol.UsageData.RefCount > 0 {
+				status = "in-use"
+			}
+		}
+		g.UpsertNode(model.Node{
+			ID:   vol.Name,
+			Kind: model.NodeVolume,
+			Name: friendlyVolumeName(vol.Name, vol.Mountpoint),
+			Attributes: map[string]string{
+				"driver":     vol.Driver,
+				"mountpoint": vol.Mountpoint,
+				"status":     status,
+			},
+		})
     })
 }
 
@@ -577,7 +601,7 @@ func friendlyVolumeName(name, mountpoint string) string {
     if reAnonVol.MatchString(name) {
         base := filepath.Base(mountpoint)
         if base != "" {
-            return "anon:" + name[:12] + "@" + base
+            return "anon:" + name[:12] + "_" + base
         }
         return "anon:" + name[:12]
     }

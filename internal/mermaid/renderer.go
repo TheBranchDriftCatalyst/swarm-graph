@@ -52,6 +52,10 @@ func Render(g model.InfraGraph, opts Options) (string, error) {
 	// Filter nodes as requested
 	nodes := make([]model.Node, 0, len(g.Nodes))
 	for _, n := range g.Nodes {
+		// Skip image nodes; image information will be attached to containers instead
+		if n.Kind == model.NodeImage {
+			continue
+		}
 		if n.Kind == model.NodeNetwork && opts.HideSystemNets {
 			if isSystemNetwork(n.Name, n.Attributes["driver"]) {
 				continue

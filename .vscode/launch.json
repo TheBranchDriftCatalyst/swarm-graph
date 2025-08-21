@@ -1,0 +1,42 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      // F5: launch without Air (direct Delve)
+      "name": "Launch: swarm-graph (no Air)",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      // "program": "${workspaceFolder}/cmd",            // if main at ./cmd/main.go
+      "program": "${workspaceFolder}/cmd/agent",   // if main at ./cmd/agent/main.go
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "-gcflags=all=-N -l",
+      "env": {
+        "LOG_LEVEL": "DEBUG",
+        "KROKI_URL": "http://localhost:8000",
+        "DOCKER_HOST": "unix:///var/run/docker.sock"
+      },
+      "showLog": true,
+      "trace": "verbose"
+    },
+    {
+      // Attach to Air’s headless Delve on port 40000
+      "name": "Attach: Air (dlv @40000)",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 40000,
+      "preLaunchTask": "air (dlv)",
+      "postDebugTask": "air: stop",
+      "showLog": true,
+      "trace": "verbose"
+    },
+    {
+      "name": "Attach: pick process",
+      "type": "go",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    }
+  ]
+}
