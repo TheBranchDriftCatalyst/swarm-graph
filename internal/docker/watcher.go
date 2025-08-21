@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"math/rand"
 	"os"
+	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -20,10 +22,15 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
+	"golang.org/x/sync/errgroup"
 
 	"swarm-graph/internal/model"
 	"swarm-graph/internal/store"
 )
+
+// util: detect anonymous docker volume names (64-hex)
+var reAnonVol = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
 
 type Watcher struct {
 	cli      *client.Client
@@ -175,69 +182,76 @@ func (w *Watcher) stopWorkers() {
 /* ===================== Snapshot ===================== */
 
 func (w *Watcher) snapshot(ctx context.Context) error {
-	// List basic types
-	imgs, err := w.cli.ImageList(ctx, image.ListOptions{All: true})
-	if err != nil {
-		return err
-	}
-	nets, err := w.cli.NetworkList(ctx, network.ListOptions{})
-	if err != nil {
-		return err
-	}
-	vols, err := w.cli.VolumeList(ctx, volume.ListOptions{})
-	if err != nil {
-		return err
-	}
-	ctrs, err := w.cli.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return err
-	}
+    // Seed static-ish nodes first (images, networks, volumes)
+    imgs, err := w.cli.ImageList(ctx, image.ListOptions{All: true})
+    if err != nil { return err }
+    nets, err := w.cli.NetworkList(ctx, network.ListOptions{})
+    if err != nil { return err }
+    vols, err := w.cli.VolumeList(ctx, volume.ListOptions{})
+    if err != nil { return err }
+    ctrs, err := w.cli.ContainerList(ctx, container.ListOptions{All: true})
+    if err != nil { return err }
 
-	// Seed static-ish nodes first (images, networks, volumes)
-	w.store.Mutate(func(g *model.InfraGraph) {
-		for _, img := range imgs {
-			name := firstNonEmpty(img.RepoTags...)
-			g.UpsertNode(model.Node{
-				ID:   img.ID,
-				Kind: model.NodeImage,
-				Name: nameOrShortID(name, img.ID),
-				Attributes: map[string]string{
-					"size":    itoa64(img.Size),
-					"tags":    strings.Join(img.RepoTags, ","),
-					"digests": strings.Join(img.RepoDigests, ","),
-				},
-			})
-		}
-		for _, nw := range nets {
-			g.UpsertNode(model.Node{
-				ID:   nw.ID,
-				Kind: model.NodeNetwork,
-				Name: nw.Name,
-				Attributes: map[string]string{
-					"driver": nw.Driver,
-					"scope":  nw.Scope,
-				},
-			})
-		}
-		for _, v := range vols.Volumes {
-			g.UpsertNode(model.Node{
-				ID:   v.Name,
-				Kind: model.NodeVolume,
-				Name: v.Name,
-				Attributes: map[string]string{
-					"driver":     v.Driver,
-					"mountpoint": v.Mountpoint,
-				},
-			})
-		}
-	})
+    w.store.Mutate(func(g *model.InfraGraph) {
+        for _, img := range imgs {
+            name := firstNonEmpty(img.RepoTags...)
+            g.UpsertNode(model.Node{
+                ID:   img.ID,
+                Kind: model.NodeImage,
+                Name: nameOrShortID(name, img.ID),
+                Attributes: map[string]string{
+                    "size":    itoa64(img.Size),
+                    "tags":    strings.Join(img.RepoTags, ","),
+                    "digests": strings.Join(img.RepoDigests, ","),
+                },
+            })
+        }
+        for _, nw := range nets {
+            g.UpsertNode(model.Node{
+                ID:   nw.ID,
+                Kind: model.NodeNetwork,
+                Name: nw.Name,
+                Attributes: map[string]string{
+                    "driver": nw.Driver,
+                    "scope":  nw.Scope,
+                },
+            })
+        }
+        for _, v := range vols.Volumes {
+            g.UpsertNode(model.Node{
+                ID:   v.Name,
+                Kind: model.NodeVolume,
+                Name: friendlyVolumeName(v.Name, v.Mountpoint),
+                Attributes: map[string]string{
+                    "driver":     v.Driver,
+                    "mountpoint": v.Mountpoint,
+                },
+            })
+        }
+    })
 
-	// Containers: enqueue parallel inspect (we need mounts/labels/IPs)
-	for _, c := range ctrs {
-		w.enqueueDebounced(kindContainer, c.ID)
-	}
-	return nil
+    // IMPORTANT: inspect containers now, concurrently, and wait
+    // Use errgroup with a sized semaphore for bounded parallelism
+    g, gctx := errgroup.WithContext(ctx)
+    sem := make(chan struct{}, max(2, w.opts.WorkerCount)) // reuse WorkerCount as cap
+
+    for _, c := range ctrs {
+        id := c.ID
+        g.Go(func() error {
+            select {
+            case sem <- struct{}{}:
+                defer func() { <-sem }()
+            case <-gctx.Done():
+                return gctx.Err()
+            }
+            // direct call into the same routine workers use
+            w.inspectContainer(gctx, id, w.log.With("snapshot", true))
+            return nil
+        })
+    }
+    return g.Wait()
 }
+
 
 /* ===================== Event handling ===================== */
 
@@ -294,89 +308,103 @@ func (w *Watcher) onEvent(ctx context.Context, evt events.Message) {
 /* ===================== Inspect workers ===================== */
 
 func (w *Watcher) inspectContainer(ctx context.Context, id string, log *slog.Logger) {
-	info, err := w.cli.ContainerInspect(ctx, id)
-	if err != nil {
-		// container might be gone; warn at debug to avoid noise
-		log.Debug("inspect container failed", "id", id, "err", err.Error())
-		return
-	}
+    info, err := w.cli.ContainerInspect(ctx, id)
+    if err != nil {
+        log.Debug("inspect container failed", "id", id, "err", err.Error())
+        return
+    }
 
-	labels := info.Config.Labels
-	stack := labels["com.docker.stack.namespace"]
-	if stack == "" {
-		stack = labels["com.docker.compose.project"]
-	}
-	svc := labels["com.docker.swarm.service.name"]
-	if svc == "" {
-		svc = labels["com.docker.compose.service"]
-	}
-	name := nameTrimLeading(info.Name)
+    labels := info.Config.Labels
+    stack := labels["com.docker.stack.namespace"]
+    if stack == "" { stack = labels["com.docker.compose.project"] }
+    svc := labels["com.docker.swarm.service.name"]
+    if svc == "" { svc = labels["com.docker.compose.service"] }
 
-	w.store.Mutate(func(g *model.InfraGraph) {
-		// Upsert node
-		g.UpsertNode(model.Node{
-			ID:   info.ID,
-			Kind: model.NodeContainer,
-			Name: name,
-			Attributes: map[string]string{
-				"image":   info.Image,
-				"status":  info.State.Status,
-				"created": info.Created,
-				"stack":   stack,
-				"service": svc,
-			},
-		})
+    name := friendlyContainerName(info.ID, info.Name, stack, svc)
 
-		// Rewire edges for this container (prune first)
-		g.RemoveEdgesWhere(func(e model.Edge) bool { return e.Src == info.ID || e.Dst == info.ID })
+    w.store.Mutate(func(g *model.InfraGraph) {
+        g.UpsertNode(model.Node{
+            ID:   info.ID,
+            Kind: model.NodeContainer,
+            Name: name,
+            Attributes: map[string]string{
+                "image":   info.Image,
+                "status":  info.State.Status,
+                "created": info.Created,
+                "stack":   stack,
+                "service": svc,
+            },
+        })
 
-		// derived_from (prefer exact image ID if known in graph)
-		imgID := info.Image
-		if _, ok := g.Nodes[imgID]; ok && imgID != "" {
-			g.AddEdge(model.Edge{Src: info.ID, Dst: imgID, Kind: model.EdgeDerivedFrom})
-		}
+        // Rewire edges for this container (prune first)
+        g.RemoveEdgesWhere(func(e model.Edge) bool { return e.Src == info.ID || e.Dst == info.ID })
 
-		// connected_to: networks
-		for nwName, ep := range info.NetworkSettings.Networks {
-			nwID := ep.NetworkID
-			if nwID == "" {
-				// best-effort: lookup by name
-				if nw, err := w.cli.NetworkInspect(ctx, nwName, network.InspectOptions{}); err == nil {
-					nwID = nw.ID
-				}
+        edgeCount := 0
+
+        // derived_from
+        imgID := info.Image // image ID like sha256:...
+        if imgID != "" {
+            if _, ok := g.Nodes[imgID]; ok {
+                g.AddEdge(model.Edge{Src: info.ID, Dst: imgID, Kind: model.EdgeDerivedFrom})
+                edgeCount++
+            }
+        }
+
+        // connected_to
+        for nwName, ep := range info.NetworkSettings.Networks {
+            nwID := ep.NetworkID
+            if nwID == "" {
+                if nw, err := w.cli.NetworkInspect(ctx, nwName, network.InspectOptions{}); err == nil {
+                    nwID = nw.ID
+                }
+            }
+            if nwID != "" {
+                if _, ok := g.Nodes[nwID]; ok {
+                    g.AddEdge(model.Edge{
+                        Src:  info.ID,
+                        Dst:  nwID,
+                        Kind: model.EdgeConnectedTo,
+                        Attributes: map[string]string{ "ip": ep.IPAddress },
+                    })
+                    edgeCount++
+                }
+            }
+        }
+
+        // mounted_into
+        for _, m := range info.Mounts {
+            if m.Type == mount.TypeVolume && m.Name != "" {
+                if _, ok := g.Nodes[m.Name]; ok {
+                    g.AddEdge(model.Edge{
+                        Src:  m.Name,
+                        Dst:  info.ID,
+                        Kind: model.EdgeMountedInto,
+                        Attributes: map[string]string{
+                            "target": m.Destination,
+                            "rw":     boolStr(m.RW),
+                        },
+                    })
+                    edgeCount++
+                }
+            }
+        }
+
+		// light debug for visibility
+		if edgeCount == 0 && w.log.Enabled(ctx, slog.LevelDebug) {
+			imageSeen := false
+			if _, ok := g.Nodes[imgID]; ok {
+				imageSeen = true
 			}
-			if nwID != "" {
-				if _, ok := g.Nodes[nwID]; ok {
-					g.AddEdge(model.Edge{
-						Src:  info.ID,
-						Dst:  nwID,
-						Kind: model.EdgeConnectedTo,
-						Attributes: map[string]string{
-							"ip": ep.IPAddress,
-						},
-					})
-				}
-			}
+			w.log.Debug("no edges for container",
+				"name", name, "id", shortID(info.ID),
+				"imageSeen", imageSeen,
+				"netCount", len(info.NetworkSettings.Networks),
+				"mountCount", len(info.Mounts),
+			)
 		}
-
-		// mounted_into: volumes
-		for _, m := range info.Mounts {
-			if m.Type == mount.TypeVolume && m.Name != "" {
-				if _, ok := g.Nodes[m.Name]; ok {
-					g.AddEdge(model.Edge{
-						Src:  m.Name,
-						Dst:  info.ID,
-						Kind: model.EdgeMountedInto,
-						Attributes: map[string]string{
-							"target": m.Destination,
-							"rw":     boolStr(m.RW),
-						},
-					})
-				}
-			}
-		}
-	})
+    })
 }
+
 
 func (w *Watcher) inspectImage(ctx context.Context, id string, log *slog.Logger) {
 	img, _, err := w.cli.ImageInspectWithRaw(ctx, id)
@@ -419,23 +447,24 @@ func (w *Watcher) inspectNetwork(ctx context.Context, id string, log *slog.Logge
 }
 
 func (w *Watcher) inspectVolume(ctx context.Context, name string, log *slog.Logger) {
-	vol, err := w.cli.VolumeInspect(ctx, name)
-	if err != nil {
-		log.Debug("inspect volume failed", "name", name, "err", err.Error())
-		return
-	}
-	w.store.Mutate(func(g *model.InfraGraph) {
-		g.UpsertNode(model.Node{
-			ID:   vol.Name,
-			Kind: model.NodeVolume,
-			Name: vol.Name,
-			Attributes: map[string]string{
-				"driver":     vol.Driver,
-				"mountpoint": vol.Mountpoint,
-			},
-		})
-	})
+    vol, err := w.cli.VolumeInspect(ctx, name)
+    if err != nil {
+        log.Debug("inspect volume failed", "name", name, "err", err.Error())
+        return
+    }
+    w.store.Mutate(func(g *model.InfraGraph) {
+        g.UpsertNode(model.Node{
+            ID:   vol.Name,
+            Kind: model.NodeVolume,
+            Name: friendlyVolumeName(vol.Name, vol.Mountpoint),
+            Attributes: map[string]string{
+                "driver":     vol.Driver,
+                "mountpoint": vol.Mountpoint,
+            },
+        })
+    })
 }
+
 
 /* ===================== Work queue helpers ===================== */
 
@@ -522,4 +551,45 @@ func minDuration(a, b time.Duration) time.Duration {
 		return a
 	}
 	return b
+}
+
+func friendlyContainerName(infoID, dockerName, stack, svc string) string {
+    dockerName = nameTrimLeading(dockerName)
+    // Prefer stack/service if available
+    if svc != "" {
+        if stack != "" {
+            return stack + "/" + svc
+        }
+        return svc
+    }
+    if dockerName != "" {
+        return dockerName
+    }
+    return shortID(infoID)
+}
+
+func friendlyVolumeName(name, mountpoint string) string {
+    if name == "" {
+        base := filepath.Base(mountpoint)
+        if base != "" { return base }
+        return "volume"
+    }
+    if reAnonVol.MatchString(name) {
+        base := filepath.Base(mountpoint)
+        if base != "" {
+            return "anon:" + name[:12] + "@" + base
+        }
+        return "anon:" + name[:12]
+    }
+    return name
+}
+
+func shortID(id string) string {
+    if strings.HasPrefix(id, "sha256:") {
+        id = strings.TrimPrefix(id, "sha256:")
+    }
+    if len(id) > 12 {
+        return id[:12]
+    }
+    return id
 }

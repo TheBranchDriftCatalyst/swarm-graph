@@ -2,7 +2,10 @@ module swarm-graph
 
 go 1.23.0
 
-require github.com/docker/docker v28.3.3+incompatible
+require (
+	github.com/docker/docker v28.3.3+incompatible
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
+)
 
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
