@@ -1,43 +1,45 @@
 services:
-  agent:
-    build:
-      context: .
-      target: runtime
-    image: swarm-graph:latest
-    container_name: swarm-graph-agent
-    restart: unless-stopped
-    ports:
-      - "9123:9123"
-    environment:
-      - LOG_LEVEL=INFO
+  # agent:
+  #   build:
+  #     context: .
+  #     target: runtime
+  #   image: swarm-graph:latest
+  #   container_name: swarm-graph-agent
+  #   restart: unless-stopped
+  #   ports:
+  #     - "9123:9123"
+  #   environment:
+  #     - LOG_LEVEL=INFO
 
-  agent-dev:
-    build:
-      context: .
-      target: dev
-    image: swarm-graph:dev
-    container_name: swarm-graph-agent-dev
-    volumes:
-      - ./:/app:cached
-      - /var/run/docker.sock:/var/run/docker.sock # give container access to host docker
-    ports:
-      - "9123:9123"
-    environment:
-      - LOG_LEVEL=DEBUG
-    tty: true
-    stdin_open: true
+  # agent-dev:
+  #   build:
+  #     context: .
+  #     target: dev
+  #   image: swarm-graph:dev
+  #   container_name: swarm-graph-agent-dev
+  #   volumes:
+  #     - ./:/app:cached
+  #     - /var/run/docker.sock:/var/run/docker.sock # give container access to host docker
+  #   ports:
+  #     - "9123:9123"
+  #   environment:
+  #     - LOG_LEVEL=DEBUG
+  #   tty: true
+  #   stdin_open: true
 
     # TODO: add some dummy services here for the graph to populate from
     # add some networks and volumes
-  dummy01:
+  dummy:
     image: alpine:latest
     command: ["sh", "-c", "while true; do echo 'Dummy service running'; sleep 5; done"]
+    deploy:
+      replicas: 3
   
   kroki:
     image: yuzutech/kroki
     ports: ["8000:8000"]
-  swarm-graph:
-    build: .
-    environment:
-      KROKI_URL: http://kroki:8000
-    depends_on: [kroki]
+  # swarm-graph:
+  #   build: .
+  #   environment:
+  #     KROKI_URL: http://kroki:8000
+  #   depends_on: [kroki]
