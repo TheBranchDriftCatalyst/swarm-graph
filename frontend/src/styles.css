@@ -1,5 +1,5 @@
 body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial; margin:0; padding:0; background:#0f1720; color:#e6eef8}
-.app{max-width:1100px;margin:24px auto;padding:16px}
+.app{max-width:1200px;margin:12px auto;padding:12px}
 header{display:flex;justify-content:space-between;align-items:center}
 .node{background:#0b1220;border:1px solid #162030;border-radius:6px;padding:8px;margin:8px 0}
 .node-title{font-weight:600}
@@ -10,7 +10,7 @@ header{display:flex;justify-content:space-between;align-items:center}
 .error{background:#3c1010;padding:8px;border-radius:4px;color:#ffdede}
 
 /* Synthwave / neon graph styles */
-.swarm-graph-wrapper{background:linear-gradient(180deg, rgba(14,10,36,0.6) 0%, rgba(15,23,32,0.9) 100%);border-radius:8px;padding:12px;margin-top:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 30px rgba(0,0,0,0.7) inset}
+.swarm-graph-wrapper{background:linear-gradient(180deg, rgba(14,10,36,0.6) 0%, rgba(15,23,32,0.9) 100%);border-radius:8px;padding:10px;margin-top:8px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 30px rgba(0,0,0,0.7) inset; height: calc(100vh - 220px); overflow: hidden}
 svg{overflow:visible}
 g.nodes text{fill:#f7f0ff; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
 g.nodes circle{transition: r 120ms ease }
