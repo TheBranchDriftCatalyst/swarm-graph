@@ -14,8 +14,10 @@ root = "."
   # Watch only Go source files
   include_ext = ["go"]
 
+  # include_dir = ['internal', 'cmd']
+
   # Ignore build / vendor / tmp dirs
-  exclude_dir = ["bin", "vendor", "tmp", "etc"]
+  exclude_dir = ["bin", "vendor", "tmp", "etc", 'frontend']
 
   # Debounce rebuilds (ms)
   delay = 1000

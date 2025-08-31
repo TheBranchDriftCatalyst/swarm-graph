@@ -1,4 +1,5 @@
 import React from 'react'
+import SwarmGraph from './SwarmGraph'
 import useDockerGraph from './hooks/useDockerGraph'
 
 function Node({ n }) {
@@ -18,7 +19,7 @@ function Node({ n }) {
 }
 
 export default function App(){
-  const { nodes, edges, error, loading } = useDockerGraph({ url: 'http://localhost:9123/graph.json', interval: 2000 })
+  const { nodes, edges, error, loading, raw } = useDockerGraph({ url: 'http://localhost:9123/graph.json', interval: 2000 })
 
   console.log(nodes, edges)
 
@@ -31,9 +32,10 @@ export default function App(){
       <main>
         {loading && <div className="meta">loading…</div>}
         {error && <div className="error">Error: {error}</div>}
-        <div className="nodes">
+        {/* <div className="nodes">
           {nodes.map(n => <Node n={n} key={n.ID} />)}
-        </div>
+        </div> */}
+        <SwarmGraph />
       </main>
     </div>
   )

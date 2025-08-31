@@ -1,81 +1,96 @@
-# Swarm Graph
+# Swarm Graph — local Docker topology explorer
 
-Lightweight agent that watches the local Docker daemon, builds an in-memory graph of images, containers, networks and volumes, and exposes a small HTTP API and renderer.
+Lightweight agent that watches a Docker daemon, keeps an in-memory graph of images, containers, networks, and volumes, and exposes a tiny HTTP API and a debug UI.
 
-## Prerequisites
+This repo is optimized for local development: fast rebuilds, a Vite frontend, and a small Go agent that talks to your Docker socket.
+
+Quick highlights
+
+- Agent HTTP API: `http://localhost:9123`
+- Frontend (Vite): `http://localhost:5173`
+
+API endpoints
+
+- `GET /graph.json` — graph snapshot (JSON)
+- `GET /graph.mmd`  — mermaid source
+- `GET /graph.svg`  — server-rendered SVG (via Kroki)
+
+Prerequisites
 
 - Go 1.23+
-- Docker (for integration and building containers)
-- Task (optional) — used for shortcuts in this repo
-- air (optional) — used for live reload during development (we provide a Taskfile target)
+- Docker (for integration and running services)
+- task (optional) — convenience task runner used in this repo
+- yarn / npm (for frontend dev)
 
-## Quick start (development)
+Fast development (recommended)
 
-1. Install deps and tidy:
+1) Install Go deps and tidy the module:
 
-```sh
+```bash
 task deps
 task tidy
 ```
 
-2. Run with live reload (Air):
+1. Start the full stack for local development (agent + frontend):
 
-```sh
+```bash
+# from repo root
+docker compose up --build
+```
+
+The `docker-compose.yml` includes the agent (backend), the vite frontend, and kroki. The frontend runs on port 5173 and talks to the agent on 9123.
+
+Run only the agent locally (dev with live reload)
+
+```bash
+# build once and run
+task build
+./bin/agent
+
+# or run with live reload (air)
 task dev
 ```
 
-This will build `bin/agent` and run `air` which watches the repository and restarts the binary on changes. The agent serves an HTTP API on port `:9123` by default.
+Frontend development
 
-## Build and run locally
-
-Build the agent binary and run it directly:
-
-```sh
-task build
-task run
+```bash
+cd frontend
+# preferred: use yarn (corepack enabled in Dockerfile); npm also works
+yarn install
+yarn dev
 ```
 
-## Docker
+Useful Taskfile targets
 
-Build a production image (uses multi-stage Dockerfile):
+- `task build` — compile agent into `bin/agent`
+- `task run` — run agent locally with `go run`
+- `task dev` — run air (live reload)
+- `task docker:build` — build a production image
+- `task docker:up` / `task docker:down` — bring up / down full compose stack
+- `task docker:dev:up` — start compose for dev (mounts source)
 
-```sh
-docker build -t swarm-graph:latest .
-```
+Configuration and environment
 
-Use docker-compose for quick dev or prod runs (see `docker-compose.yml`):
+- `DOCKER_HOST` — point the agent to a non-default Docker daemon
+- `KROKI_URL` — change the Kroki server used for server-side rendering (default: `https://kroki.io`)
+- `CORS_ORIGIN` — controls allowed origin for the HTTP API (default `*` in dev)
 
-```sh
-# development (mounts code and runs air)
-docker compose up --build agent-dev
+Troubleshooting notes
 
-# production (builds runtime image)
-docker compose up --build agent
-```
+- If the frontend fails with an esbuild platform error when running in Docker, ensure host `node_modules` are not being copied into the image. The repo includes `.dockerignore` and the compose file mounts a named volume for `/app/node_modules` to avoid this.
+- If the browser fetch to `/graph.json` is blocked by CORS, set `CORS_ORIGIN` on the agent or run both services on the same origin (via a reverse proxy).
 
-## Tasks
+Developer tips
 
-The `Taskfile.yml` includes shortcuts for common workflows:
+- The frontend hook `useDockerGraph` normalizes the API shape (supports both map-based `nodes` and array `Nodes`). If you change the API, update the hook accordingly.
+- Use `docker compose logs -f frontend` and `docker compose logs -f backend` to tail logs while developing.
 
-- `task deps` — download go dependencies
-- `task tidy` — run `go mod tidy`
-- `task build` — build binary into `bin/agent`
-- `task run` — run the agent via `go run`
-- `task dev` — run air live reload
-- `task docker:build` — build docker image
-- `task docker:up` / `task docker:down` — manage compose
+Contributing
 
-## Notes
+- Open issues or PRs for bugs and small enhancements. Keep changes focused and test locally with the compose setup.
 
-- The agent relies on having access to the Docker socket or a reachable Docker daemon via `DOCKER_HOST`.
-- The HTTP API is served on port `9123` by default. If the port is in use the server will log an error.
-- If you want the dev container to access the host Docker daemon, mount your Docker socket into the container in `docker-compose.yml`.
+License & credits
 
-## Troubleshooting
+- MIT-style (see repository root)
 
-- If Air reports "no Go files in ..." ensure `go.mod` is present in the repository root and `module` is set correctly.
-- If imports fail after upgrading Docker modules, run `task refresh` (get + tidy) to sync `go.mod`.
-
----
-
-Happy hacking.
+Have fun exploring your local Docker stack — go make it sexy.

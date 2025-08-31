@@ -8,3 +8,19 @@ header{display:flex;justify-content:space-between;align-items:center}
 .attr{color:#cfe4ff}
 .nodes{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .error{background:#3c1010;padding:8px;border-radius:4px;color:#ffdede}
+
+/* Synthwave / neon graph styles */
+.swarm-graph-wrapper{background:linear-gradient(180deg, rgba(14,10,36,0.6) 0%, rgba(15,23,32,0.9) 100%);border-radius:8px;padding:12px;margin-top:12px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 8px 30px rgba(0,0,0,0.7) inset}
+svg{overflow:visible}
+g.nodes text{fill:#f7f0ff; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+g.nodes circle{transition: r 120ms ease }
+.links line{stroke:rgba(255,255,255,0.06)}
+
+/* subtle grid / horizon */
+.swarm-graph-wrapper:before{content:"";position:relative;display:block;height:8px;margin-bottom:8px;background:linear-gradient(90deg, rgba(255,0,140,0.04) 0%, rgba(0,200,255,0.02) 50%, rgba(255,140,0,0.03) 100%)}
+
+/* minimal legend */
+.legend{display:flex;gap:12px;margin-top:8px}
+.legend .item{display:flex;gap:8px;align-items:center;color:#cfe4ff;font-size:13px}
+.legend .swatch{width:12px;height:12px;border-radius:3px}
+

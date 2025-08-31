@@ -66,11 +66,27 @@ tasks:
     # run docker compose up with no cache
     - docker compose up
 
-  fixture:graph:
-    desc: Run a local graph fixture
+  frontend:install:
+    desc: Install frontend dependencies (yarn)
     cmds:
-      # curl and grab the sample data fixture from graph.json endpoint
-      # - docker run --rm -v $(pwd)/fixtures:/fixtures swarm-graph:latest -graph /fixtures/graph.json
+    - cd frontend && yarn install
+
+  frontend:dev:
+    desc: Run frontend dev server
+    cmds:
+    - cd frontend && yarn dev
+
+  compose:rebuild:
+    desc: Rebuild compose images without cache and bring services up
+    cmds:
+    - docker compose build --no-cache
+    - docker compose up -d
+
+  fixture:graph:
+    desc: Fetch a graph.json fixture from a running agent
+    cmds:
+    - mkdir -p fixtures
+    - curl -sS http://localhost:9123/graph.json -o fixtures/graph.json
 
   docker:dev:down:
     desc: Stop the dev compose services
