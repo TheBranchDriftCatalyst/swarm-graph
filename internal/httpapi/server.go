@@ -122,8 +122,28 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	// Optional: static UI at /assets/
 	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(uiFS))))
 
-	// Wrap with a tiny access log
-	return accessLog(log, mux)
+	// Wrap with a tiny access log and simple CORS middleware
+	corsOrigin := envOr("CORS_ORIGIN", "*")
+	return accessLog(log, corsMiddleware(mux, corsOrigin))
+}
+
+// corsMiddleware sets basic CORS headers and handles OPTIONS preflight.
+// The origin parameter may be '*' or a specific origin like 'http://localhost:5173'.
+func corsMiddleware(next http.Handler, origin string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Allow the configured origin. In production you may want to restrict this.
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Set("Vary", "Origin")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization")
+
+		if r.Method == http.MethodOptions {
+			// Preflight request - no body
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 /* ---------- helpers ---------- */

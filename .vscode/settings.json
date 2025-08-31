@@ -14,5 +14,8 @@
     "evenBetterToml.schema.associations": {
       // https://github.com/air-verse/air/blob/master/air_example.toml
       "**/air.toml": "./.air.schema.json"
-    }
+    },
+    "cSpell.words": [
+      "traefik"
+    ]
 }

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 WORKDIR /src
 
 # Cache modules
@@ -28,13 +28,11 @@ USER app
 # configure as needed (EXPOSE, ENV)
 ENTRYPOINT ["./agent"]
 
-# TODO: figure out how to effectively integrate this into compose?
-
 # Optional dev stage for live reload (use only in development)
 # docker build --target=dev -t myapp:dev .
-FROM golang:1.23-alpine AS dev
+FROM golang:1.24-alpine AS dev
 WORKDIR /app
 RUN apk add --no-cache bash git
-RUN go install github.com/cosmtrek/air@latest
+RUN go install github.com/air-verse/air@latest
 COPY . .
 CMD ["air"]

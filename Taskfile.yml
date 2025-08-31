@@ -63,7 +63,14 @@ tasks:
   docker:dev:up:
     desc: Start the dev compose service (mounts source and runs air)
     cmds:
-    - docker compose up --build agent-dev
+    # run docker compose up with no cache
+    - docker compose up
+
+  fixture:graph:
+    desc: Run a local graph fixture
+    cmds:
+      # curl and grab the sample data fixture from graph.json endpoint
+      # - docker run --rm -v $(pwd)/fixtures:/fixtures swarm-graph:latest -graph /fixtures/graph.json
 
   docker:dev:down:
     desc: Stop the dev compose services
