@@ -2,10 +2,6 @@ volumes:
   dummy-data:
   frontend_node_modules:
 
-networks:
-  traefik-public:
-    driver: bridge
-
 services:
   backend:
     build:

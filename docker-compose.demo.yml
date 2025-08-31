@@ -1,17 +1,21 @@
-version: '3.8'
 volumes:
   dummy-data:
+
+networks:
+  traefik-public:
+    driver: bridge
 
 services:
   dummy:
     image: alpine:latest
     command: 
-     - "sh"
-     - "-c"
-     - "while true;"
-     - "do echo 'Dummy service running'; "
-     - "sleep 5;"
-     - "done"
+      - sh
+      - -c
+      - |
+        while true; do
+          echo "Dummy container to hold volume"
+          sleep 3600
+        done
     volumes:
       - dummy-data:/data
     deploy:
@@ -84,7 +88,3 @@ services:
       - "traefik.http.routers.kroki.entrypoints=web"
       - "traefik.http.services.kroki.loadbalancer.server.port=8000"
     depends_on: [traefik]
-    
-networks:
-  traefik-public:
-    external: true
