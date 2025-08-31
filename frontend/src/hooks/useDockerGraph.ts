@@ -30,7 +30,9 @@ export default function useDockerGraph(opts: Opts = {}) {
         const res = await fetch(url)
         if (!res.ok) {
           const txt = await res.text().catch(() => '')
-          throw new Error(`HTTP ${res.status} ${res.statusText} ${txt ? '- ' + txt.slice(0,200) : ''}`)
+          throw new Error(
+            `HTTP ${res.status} ${res.statusText} ${txt ? '- ' + txt.slice(0, 200) : ''}`
+          )
         }
         const j = await res.json()
         setRaw(j)
@@ -41,7 +43,11 @@ export default function useDockerGraph(opts: Opts = {}) {
           gotNodes = (j as any).Nodes
         } else if (Array.isArray((j as any)?.nodes)) {
           gotNodes = (j as any).nodes
-        } else if (j && typeof (j as any).nodes === 'object' && (j as any).nodes !== null) {
+        } else if (
+          j &&
+          typeof (j as any).nodes === 'object' &&
+          (j as any).nodes !== null
+        ) {
           gotNodes = Object.values((j as any).nodes)
         }
 
@@ -65,7 +71,10 @@ export default function useDockerGraph(opts: Opts = {}) {
     // initial fetch and periodic refresh
     fetchGraph()
     const id = setInterval(fetchGraph, intervalMs)
-    return () => { mounted.current = false; clearInterval(id) }
+    return () => {
+      mounted.current = false
+      clearInterval(id)
+    }
   }, [url, intervalMs])
   return { nodes, edges, error, loading, raw }
 }
