@@ -1,5 +1,6 @@
 import * as d3 from 'd3'
 import { colors, nodeIcons } from './SwarmGraphStyles'
+import { Logger } from './Logger';
 
 export const drawNodes = (
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
@@ -69,6 +70,11 @@ export const drawNodes = (
     .attr('font-size', '12px')
     .attr('fill', '#FFF')
     .text((d) => d.name)
+
+  // structured log for nodes
+  node.each(function(d: any) {
+    Logger.debug('node.drawn', { id: d.id, kind: d.kind, name: d.name, attributes: d.attributes });
+  });
 
   return node
 }

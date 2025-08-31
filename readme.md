@@ -1,3 +1,21 @@
+# TODO:
+
+- [ ] Create the backend folder for the go app, better isolation (P1)
+  - [ ] fix actual go module name to include github (P1)
+  - [ ] update import paths to use the new module name (P1)
+- [ ] Create service/image/container asset layer
+  - [ ] i.e., show traefik logo and create basic node structure
+    - We weant to use some of htis in the mermaid renderer as well probably so company logos show up
+- [ ] Make it so we use the local version of kroki (P2)
+- [ ] Make it also use the local version of the frontend (P2)
+- [ ] Maybe add metrics to this, using my prom-sniffer image (P5)
+
+
+## Screenshots
+![alt text](image.png)
+
+![alt text](image-1.png)
+
 # Swarm Graph — local Docker topology explorer
 
 Lightweight agent that watches a Docker daemon, keeps an in-memory graph of images, containers, networks, and volumes, and exposes a tiny HTTP API and a debug UI.

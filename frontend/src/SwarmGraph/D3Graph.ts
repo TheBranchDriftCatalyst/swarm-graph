@@ -3,6 +3,7 @@ import { NodeKind, EdgeKind } from '../types'
 import { colors, nodeIcons } from './SwarmGraphStyles'
 import { drawNodes } from './D3Node'
 import { drawEdges } from './D3Edge'
+import { Logger } from './Logger'
 
 interface Props {
   data: any
@@ -92,13 +93,15 @@ export const initGraph = ({
     )
     .map((l: any) => ({ ...l, source: nodeMap[l.src], target: nodeMap[l.dst] }))
 
-  // draw edges + nodes
-  const linkSel = drawEdges(g, links)
+  const { link: linkSel, labels: labelSel } = drawEdges(g, links)
   const nodeSel = drawNodes(g, nodes, {
     setHoveredNode,
     setSelectedNode,
     selectedNode,
   })
+
+  Logger.info('graph.init', { nodeCount: nodes.length, edgeCount: links.length })
+  Logger.debug('nodes.created', nodes.map((n: any) => ({ id: n.id, kind: n.kind, name: n.name, attributes: n.attributes })))
 
   const sim = d3
     .forceSimulation(nodes as any)
@@ -119,6 +122,10 @@ export const initGraph = ({
       .attr('y1', (d: any) => d.source.y)
       .attr('x2', (d: any) => d.target.x)
       .attr('y2', (d: any) => d.target.y)
+    // position labels at midpoints
+    labelSel
+      .attr('x', (d: any) => ((d.source.x + d.target.x) / 2))
+      .attr('y', (d: any) => ((d.source.y + d.target.y) / 2))
     nodeSel.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
   })
 
