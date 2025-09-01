@@ -7,6 +7,9 @@ import NodeDetails from './NodeDetails'
 import Title from './Title'
 import { initGraph } from './D3Graph'
 
+// TODO: afgter two or so interactions the nodes no longer become draggable for some reason
+// hover works 
+
 const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const [dimensions, setDimensions] = useState({

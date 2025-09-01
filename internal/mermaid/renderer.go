@@ -11,15 +11,21 @@ import (
 
 // Options controls rendering behavior.
 type Options struct {
-	Direction       string            // "TB", "LR", "BT", "RL"
-	ClusterByKind   bool              // group nodes in subgraphs by NodeKind
-	IncludeStopped  bool              // include containers with state != "running"
-	ShortenIDs      bool              // show short IDs for names if Name empty
-	HideSystemNets  bool              // hide default docker networks (bridge, host, none)
+	Direction       string                    // "TB", "LR", "BT", "RL"
+	ClusterByKind   bool                      // group nodes in subgraphs by NodeKind
+	IncludeStopped  bool                      // include containers with state != "running"
+	ShortenIDs      bool                      // show short IDs for names if Name empty
+	HideSystemNets  bool                      // hide default docker networks (bridge, host, none)
 	NodeStyles      map[model.NodeKind]string // Mermaid style for nodes by kind (optional)
-	EdgeLabels      bool              // label edges by EdgeKind
-	ExtraNodeFields []string          // attributes to surface in node labels (e.g., ["image","state"])
+	EdgeLabels      bool                      // label edges by EdgeKind
+	ExtraNodeFields []string                  // attributes to surface in node labels (e.g., ["image","state"])
 }
+
+// TODO: add params to filter node and edges by type
+// TODO: add custom layer vendor icons/logos
+// FFor example we can label the container image with the logo for sonarr,radarrr
+// We want to be able to define these configs as a json as well. services.json which
+// would store the logo,.
 
 // DefaultOptions returns sensible defaults.
 func DefaultOptions() Options {
@@ -145,13 +151,13 @@ func Render(g model.InfraGraph, opts Options) (string, error) {
 		for _, n := range nodes {
 			byKind[n.Kind] = append(byKind[n.Kind], n)
 		}
-		
+
 		// Convert iterator to slice
 		var kinds []model.NodeKind
 		for kind := range maps.Keys(byKind) {
 			kinds = append(kinds, kind)
 		}
-		
+
 		slices.SortFunc(kinds, func(a, b model.NodeKind) int {
 			if a < b {
 				return -1

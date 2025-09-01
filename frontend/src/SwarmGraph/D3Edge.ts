@@ -2,6 +2,8 @@ import * as d3 from 'd3'
 import { colors } from './SwarmGraphStyles'
 import { Logger } from './Logger'
 
+// TODO: the edges are bit hard to see in the graph
+
 export const drawEdges = (
   g: d3.Selection<SVGGElement, unknown, null, undefined>,
   links: any[]
