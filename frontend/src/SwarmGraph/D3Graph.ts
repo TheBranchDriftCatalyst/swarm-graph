@@ -110,11 +110,19 @@ export const initGraph = ({
       d3
         .forceLink(links)
         .id((d: any) => d.id)
-        .distance(120)
+        .distance((d: any) => {
+          switch (d.kind) {
+          case 'derived_from': return 120
+          case 'connected_to': return 180
+          case 'mounted_into': return 140
+          default: return 120
+          }
+        })
     )
-    .force('charge', d3.forceManyBody().strength(-120))
+    .force('charge', d3.forceManyBody().strength(-80))
     .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(40))
+    .force('collision', d3.forceCollide().radius(60))
+    .alphaDecay(0.02)
 
   sim.on('tick', () => {
     linkSel

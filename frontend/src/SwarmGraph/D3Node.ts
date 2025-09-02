@@ -44,32 +44,89 @@ export const drawNodes = (
           d.fy = null
         })
     )
+  // small mapping from common image names to logo URLs (customize as needed)
+  const vendorLogos: Record<string, string> = {
+    nginx: 'https://raw.githubusercontent.com/devicons/devicon/master/icons/nginx/nginx-original.svg',
+    redis: 'https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original.svg',
+    postgres: 'https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original.svg',
+  }
 
-  node
-    .append('circle')
-    .attr('r', 25)
-    .attr('fill', (d) => colors[d.kind])
-    .attr('fill-opacity', 0.2)
-  node
-    .append('circle')
-    .attr('r', 20)
-    .attr('fill', 'none')
-    .attr('stroke', (d) => colors[d.kind])
-    .attr('stroke-width', 2)
-  node
-    .append('text')
-    .attr('text-anchor', 'middle')
-    .attr('dominant-baseline', 'central')
-    .attr('font-size', '24px')
-    .attr('fill', (d) => colors[d.kind])
-    .text((d) => nodeIcons[d.kind])
-  node
-    .append('text')
-    .attr('text-anchor', 'middle')
-    .attr('y', 35)
-    .attr('font-size', '12px')
-    .attr('fill', '#FFF')
-    .text((d) => d.name)
+  // card dimensions
+  const cardW = 160
+  const cardH = 52
+  const pad = 8
+  const imgSize = 28
+
+  // render as a rounded rect card with optional image + text
+  node.append('rect')
+    .attr('x', -cardW / 2)
+    .attr('y', -cardH / 2)
+    .attr('rx', 8)
+    .attr('ry', 8)
+    .attr('width', cardW)
+    .attr('height', cardH)
+    .attr('fill', (d: any) => colors[d.kind] || '#0b1220')
+    .attr('fill-opacity', 0.06)
+    .attr('stroke', (d: any) => colors[d.kind] || '#888')
+    .attr('stroke-width', 1.5)
+    .attr('class', 'node-card')
+
+  // image or icon
+  node.each(function (d: any) {
+    const g = d3.select(this)
+    const imageRef = (d.attributes && d.attributes.image) || ''
+    let logoUrl: string | undefined
+    if (imageRef) {
+      const parts = String(imageRef).split('/')
+      const last = parts[parts.length - 1].split(':')[0]
+      if (vendorLogos[last]) logoUrl = vendorLogos[last]
+    }
+    if (logoUrl) {
+      g.append('image')
+        .attr('href', logoUrl)
+        .attr('x', -cardW / 2 + pad)
+        .attr('y', -imgSize / 2)
+        .attr('width', imgSize)
+        .attr('height', imgSize)
+        .attr('preserveAspectRatio', 'xMidYMid meet')
+    } else {
+      g.append('text')
+        .attr('x', -cardW / 2 + pad + imgSize / 2)
+        .attr('y', 6)
+        .attr('text-anchor', 'middle')
+        .attr('font-size', 18)
+        .attr('fill', (d: any) => colors[d.kind])
+        .text((d: any) => nodeIcons[d.kind])
+    }
+
+    // name
+    g.append('text')
+      .attr('x', -cardW / 2 + pad + imgSize + 8)
+      .attr('y', -6)
+      .attr('text-anchor', 'start')
+      .attr('font-size', 12)
+      .attr('fill', '#FFF')
+      .attr('font-weight', '600')
+      .text((d: any) => d.name || d.Name || '')
+
+    // status line
+    const status = (d.attributes && d.attributes.status) || ''
+    g.append('text')
+      .attr('x', -cardW / 2 + pad + imgSize + 8)
+      .attr('y', 14)
+      .attr('text-anchor', 'start')
+      .attr('font-size', 11)
+      .attr('fill', status === 'running' ? '#7CFC00' : '#FF6B6B')
+      .text(status)
+
+    // small status dot on top-right
+    g.append('circle')
+      .attr('cx', cardW / 2 - pad - 6)
+      .attr('cy', -cardH / 2 + pad + 6)
+      .attr('r', 5)
+      .attr('fill', status === 'running' ? '#00FF66' : '#FF3B30')
+      .attr('opacity', 0.95)
+  })
 
   // structured log for nodes
   node.each(function(d: any) {
