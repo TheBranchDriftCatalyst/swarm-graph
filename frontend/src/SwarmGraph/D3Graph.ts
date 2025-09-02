@@ -137,6 +137,29 @@ export const initGraph = ({
     nodeSel.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
   })
 
+  // Attach drag behavior to nodes here so the simulation can be
+  // warmed up while dragging and then decay again. This prevents
+  // nodes from becoming permanently fixed when the sim cools.
+  const drag = d3.drag<SVGGElement, any>()
+    .on('start', (event, d: any) => {
+      if (!event.active) sim.alphaTarget(0.3).restart()
+      d.fx = d.x
+      d.fy = d.y
+    })
+    .on('drag', (event, d: any) => {
+      d.fx = event.x
+      d.fy = event.y
+    })
+    .on('end', (event, d: any) => {
+      // lower the alpha target and let the sim settle
+      if (!event.active) sim.alphaTarget(0)
+      // clear fixed position so node can continue to be simulated
+      d.fx = null
+      d.fy = null
+    })
+
+  nodeSel.call(drag as any)
+
   return () => {
     sim.stop()
   }

@@ -29,21 +29,9 @@ export const drawNodes = (
       setHoveredNode(null)
     })
     .on('click', (_evt, d: any) => setSelectedNode(d.id))
-    .call(
-      d3
-        .drag<SVGGElement, any>()
-        .on('start', (event, d) => {
-          if (!event.active) event.subject.fx = event.x
-        })
-        .on('drag', (event, d) => {
-          d.fx = event.x
-          d.fy = event.y
-        })
-        .on('end', (event, d) => {
-          d.fx = null
-          d.fy = null
-        })
-    )
+  // drag behavior is attached from the graph initializer so it can
+  // control the simulation (alphaTarget) and keep the sim running
+  // while user drags nodes. See D3Graph.ts for the drag handlers.
   // small mapping from common image names to logo URLs (customize as needed)
   const vendorLogos: Record<string, string> = {
     nginx: 'https://raw.githubusercontent.com/devicons/devicon/master/icons/nginx/nginx-original.svg',
