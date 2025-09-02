@@ -63,45 +63,33 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf8"
+
+	"swarm-graph/internal/model"
 )
 
 // ===== Shared DTOs (kept compatible with the frontend D3 layer) =====
 
-type NodeKind string
+// Use types from the model package
+type NodeKind = model.NodeKind
 
 const (
-	NodeContainer NodeKind = "container"
-	NodeNetwork   NodeKind = "network"
-	NodeImage     NodeKind = "image"
-	NodeVolume    NodeKind = "volume"
+	NodeContainer = model.NodeContainer
+	NodeNetwork   = model.NodeNetwork
+	NodeImage     = model.NodeImage
+	NodeVolume    = model.NodeVolume
 )
 
-type EdgeKind string
+type EdgeKind = model.EdgeKind
 
 const (
-	EdgeDerivedFrom EdgeKind = "derived_from"
-	EdgeConnectedTo EdgeKind = "connected_to"
-	EdgeMountedInto EdgeKind = "mounted_into"
+	EdgeDerivedFrom = model.EdgeDerivedFrom
+	EdgeConnectedTo = model.EdgeConnectedTo
+	EdgeMountedInto = model.EdgeMountedInto
 )
 
-type Node struct {
-	ID         string            `json:"id"`
-	Kind       NodeKind          `json:"kind"`
-	Name       string            `json:"name"`
-	Attributes map[string]string `json:"attributes,omitempty"`
-}
-
-type Edge struct {
-	Src        string            `json:"src"`
-	Dst        string            `json:"dst"`
-	Kind       EdgeKind          `json:"kind"`
-	Attributes map[string]string `json:"attributes,omitempty"`
-}
-
-type InfraGraph struct {
-	Nodes map[string]Node `json:"nodes"`
-	Edges []Edge          `json:"edges"`
-}
+type Node = model.Node
+type Edge = model.Edge
+type InfraGraph = model.InfraGraph
 
 // ===== Formatting Layer =====
 
@@ -187,7 +175,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 		if edges[i].Dst != edges[j].Dst {
 			return edges[i].Dst < edges[j].Dst
 		}
-		return edges[i].Kind <bb edges[j].Kind
+		return edges[i].Kind < edges[j].Kind
 	})
 
 	// Prepare Mermaid
@@ -203,7 +191,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 	for _, extra := range opts.ExtraClassDefs {
 		buf.WriteString(extra)
 		if !strings.HasSuffix(extra, "\n") {
-			buf.WriteByte('</br>')
+			buf.WriteByte('\n')
 		}
 	}
 
@@ -330,7 +318,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 			for _, id := range grouped[gv] {
 				for _, line := range nodeLines(nodes[id], mermID[id]) {
 					buf.WriteString(line)
-					buf.WriteByte('</br>')
+					buf.WriteByte('\n')
 				}
 			}
 			buf.WriteString("  end\n")
@@ -340,7 +328,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 		for _, id := range nodeIDs {
 			for _, line := range nodeLines(nodes[id], mermID[id]) {
 				buf.WriteString(line)
-				buf.WriteByte('</br>')
+				buf.WriteByte('\n')
 			}
 		}
 	}
@@ -354,7 +342,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 			continue
 		}
 		buf.WriteString(edgeLine(e, src, dst))
-		buf.WriteByte('</br>')
+		buf.WriteByte('\n')
 	}
 
 	// Legend (optional)
@@ -387,6 +375,26 @@ func RenderToFile(path string, g InfraGraph, opts RenderOptions, nf NodeFormatte
 	}
 	defer f.Close()
 	return Render(f, g, opts, nf, ef, m)
+}
+
+// RenderToString renders a Mermaid flowchart to a string and returns it.
+func RenderToString(g InfraGraph, opts RenderOptions, nf NodeFormatter, ef EdgeFormatter, m *slog.Logger) (string, error) {
+	var buf bytes.Buffer
+	err := Render(&buf, g, opts, nf, ef, m)
+	if err != nil {
+		return "", err
+	}
+	return buf.String(), nil
+}
+
+// DefaultOptions returns sensible default options for rendering.
+func DefaultOptions() RenderOptions {
+	return RenderOptions{
+		Direction:     "LR",
+		ShowNodeIDs:   false,
+		MaxLabelRunes: 48,
+		IncludeLegend: true,
+	}
 }
 
 // LoadInfraGraph reads a graph.json (same as frontend) from r.

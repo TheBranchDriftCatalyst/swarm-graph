@@ -59,7 +59,7 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	// Raw Mermaid source
 	mux.HandleFunc("/graph.mmd", func(w http.ResponseWriter, r *http.Request) {
 		g := st.Snapshot()
-		txt, err := mermaid.Render(g, mermaid.DefaultOptions())
+		txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
 		if err != nil {
 			httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
 			return
@@ -87,6 +87,28 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	})
 	mux.HandleFunc("/graph.png", func(w http.ResponseWriter, r *http.Request) {
 		serveRendered(w, r, st, opts, log, "png", "image/png")
+	})
+
+	// Client-side HTML viewer
+	mux.HandleFunc("/graph.html", func(w http.ResponseWriter, r *http.Request) {
+		g := st.Snapshot()
+		txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
+		if err != nil {
+			httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
+			return
+		}
+
+		etag := etagFor(txt + "|html")
+		if checkIfNoneMatch(w, r, etag) {
+			return
+		}
+
+		setCommonHeaders(w, "text/html; charset=utf-8", etag, 0)
+		_ = tmplGraphHTML.Execute(w, struct {
+			Diagram string
+		}{
+			Diagram: txt,
+		})
 	})
 
 	// Health
@@ -128,7 +150,7 @@ func serveRendered(w http.ResponseWriter, r *http.Request, st *store.MemoryStore
 	ctx := r.Context()
 
 	g := st.Snapshot()
-	txt, err := mermaid.Render(g, mermaid.DefaultOptions())
+	txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
 	if err != nil {
 		httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
 		return
