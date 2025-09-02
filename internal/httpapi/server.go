@@ -89,30 +89,6 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 		serveRendered(w, r, st, opts, log, "png", "image/png")
 	})
 
-	// Client-side viewer (no external deps except a tiny embedded mermaid.min.js)
-	mux.HandleFunc("/graph.html", func(w http.ResponseWriter, r *http.Request) {
-		g := st.Snapshot()
-		txt, err := mermaid.Render(g, mermaid.DefaultOptions())
-		if err != nil {
-			httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
-			return
-		}
-		etag := etagFor(txt)
-		if checkIfNoneMatch(w, r, etag) {
-			return
-		}
-		setCommonHeaders(w, "text/html; charset=utf-8", etag, opts.CacheMaxAge)
-
-		data := struct {
-			Diagram string
-		}{Diagram: txt}
-
-		if err := tmplGraphHTML.Execute(w, data); err != nil {
-			httpError(log, w, r, http.StatusInternalServerError, "template: %v", err)
-			return
-		}
-	})
-
 	// Health
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		setCommonHeaders(w, "text/plain; charset=utf-8", "", 0)

@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react'
 import SwarmGraph from './SwarmGraph/SwarmGraph'
 import useDockerGraph from './hooks/useDockerGraph'
 
+// TODO: add a few of the other endpoints as well graph.mmd (go module httpapi.go)
+// for viewing and better simple page routing.
+
 function SimpleNode({ n }) {
   const name = n.name || n.Name || n.id || 'unknown'
   const kind = n.kind || n.Kind || ''

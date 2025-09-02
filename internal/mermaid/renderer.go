@@ -1,366 +1,529 @@
+// Package mermaid renders an InfraGraph (shared with the D3 frontend) into Mermaid flowchart text.
+//
+// Usage:
+//
+//	f, _ := os.Create("graph.mmd")
+//	defer f.Close()
+//
+//	// g := load your InfraGraph JSON (same you send to the frontend)
+//	opts := mermaid.RenderOptions{
+//	    Direction:        "LR",              // "LR", "TB", "BT", "RL"
+//	    GroupByAttr:      "stack",           // group containers etc by "stack" attribute; "" to disable grouping
+//	    ShowNodeIDs:      false,             // optionally append short IDs to labels
+//	    MaxLabelRunes:    48,                // truncate long labels (0 disables)
+//	    IncludeLegend:    true,
+//	}
+//
+//	// Optional: formatting layer for nicer labels.
+//	nf := mermaid.NodeFormatterFunc(func(n mermaid.Node) (string, map[string]string) {
+//	    // Prefer friendly container label: "<image>:<tag> • <shortID>"
+//	    if n.Kind == mermaid.NodeContainer {
+//	        img := n.Attributes["image"]
+//	        sid := mermaid.ShortID(n.ID)
+//	        if img != "" {
+//	            return img + " • " + sid, nil
+//	        }
+//	        return n.Name + " • " + sid, nil
+//	    }
+//	    // networks/images/volumes fall back to Name or short ID
+//	    if n.Name != "" {
+//	        return n.Name, nil
+//	    }
+//	    return mermaid.ShortID(n.ID), nil
+//	})
+//
+//	ef := mermaid.EdgeFormatterFunc(func(e mermaid.Edge) string {
+//	    switch e.Kind {
+//	    case mermaid.EdgeConnectedTo:
+//	        if ip := e.Attributes["ip"]; ip != "" {
+//	            return ip
+//	        }
+//	    case mermaid.EdgeMountedInto:
+//	        if tgt := e.Attributes["target"]; tgt != "" {
+//	            return tgt
+//	        }
+//	    }
+//	    return ""
+//	})
+//
+//	if err := mermaid.Render(f, g, opts, nf, ef, nil); err != nil {
+//	    log.Fatal(err)
+//	}
 package mermaid
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"maps"
-	"slices"
+	"io"
+	"log/slog"
+	"os"
+	"regexp"
 	"sort"
 	"strings"
-	"swarm-graph/internal/model"
+	"unicode/utf8"
 )
 
-// Options controls rendering behavior.
-type Options struct {
-	Direction       string                    // "TB", "LR", "BT", "RL"
-	ClusterByKind   bool                      // group nodes in subgraphs by NodeKind
-	IncludeStopped  bool                      // include containers with state != "running"
-	ShortenIDs      bool                      // show short IDs for names if Name empty
-	HideSystemNets  bool                      // hide default docker networks (bridge, host, none)
-	NodeStyles      map[model.NodeKind]string // Mermaid style for nodes by kind (optional)
-	EdgeLabels      bool                      // label edges by EdgeKind
-	ExtraNodeFields []string                  // attributes to surface in node labels (e.g., ["image","state"])
+// ===== Shared DTOs (kept compatible with the frontend D3 layer) =====
+
+type NodeKind string
+
+const (
+	NodeContainer NodeKind = "container"
+	NodeNetwork   NodeKind = "network"
+	NodeImage     NodeKind = "image"
+	NodeVolume    NodeKind = "volume"
+)
+
+type EdgeKind string
+
+const (
+	EdgeDerivedFrom EdgeKind = "derived_from"
+	EdgeConnectedTo EdgeKind = "connected_to"
+	EdgeMountedInto EdgeKind = "mounted_into"
+)
+
+type Node struct {
+	ID         string            `json:"id"`
+	Kind       NodeKind          `json:"kind"`
+	Name       string            `json:"name"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
-// TODO: add params to filter node and edges by type
-// TODO: add custom layer vendor icons/logos
-// FFor example we can label the container image with the logo for sonarr,radarrr
-// We want to be able to define these configs as a json as well. services.json which
-// would store the logo,.
-
-// DefaultOptions returns sensible defaults.
-func DefaultOptions() Options {
-	return Options{
-		Direction:      "TB",
-		ClusterByKind:  true,
-		IncludeStopped: true,
-		ShortenIDs:     true,
-		HideSystemNets: true,
-		NodeStyles: map[model.NodeKind]string{
-			model.NodeContainer: "fill:#1f6feb,stroke:#0d419d,stroke-width:1px,color:#fff",
-			model.NodeImage:     "fill:#6e7781,stroke:#30363d,stroke-width:1px,color:#fff",
-			model.NodeNetwork:   "fill:#238636,stroke:#0e4429,stroke-width:1px,color:#fff",
-			model.NodeVolume:    "fill:#8957e5,stroke:#553098,stroke-width:1px,color:#fff",
-		},
-		EdgeLabels:      true,
-		ExtraNodeFields: []string{"image", "state", "driver"},
-	}
+type Edge struct {
+	Src        string            `json:"src"`
+	Dst        string            `json:"dst"`
+	Kind       EdgeKind          `json:"kind"`
+	Attributes map[string]string `json:"attributes,omitempty"`
 }
 
-// Render returns a Mermaid flowchart ("flowchart <dir>\n...") for the provided graph.
-// The result is deterministic (stable ordering of nodes and edges).
-func Render(g model.InfraGraph, opts Options) (string, error) {
-	if opts.Direction == "" {
-		opts = DefaultOptionsOverride(opts)
+type InfraGraph struct {
+	Nodes map[string]Node `json:"nodes"`
+	Edges []Edge          `json:"edges"`
+}
+
+// ===== Formatting Layer =====
+
+// NodeFormatter returns a display label and optional class overrides via extras (unused for now).
+type NodeFormatter interface {
+	FormatNode(n Node) (label string, extras map[string]string)
+}
+type NodeFormatterFunc func(n Node) (label string, extras map[string]string)
+
+func (f NodeFormatterFunc) FormatNode(n Node) (string, map[string]string) { return f(n) }
+
+type EdgeFormatter interface {
+	FormatEdge(e Edge) (label string)
+}
+type EdgeFormatterFunc func(e Edge) string
+
+func (f EdgeFormatterFunc) FormatEdge(e Edge) string { return f(e) }
+
+// ===== Render Options =====
+
+type RenderOptions struct {
+	// Mermaid direction: "LR", "RL", "TB", "BT"
+	Direction string
+
+	// GroupByAttr clusters nodes into Mermaid subgraphs by this attribute (e.g., "stack").
+	// Leave empty to disable grouping.
+	GroupByAttr string
+
+	// If true, append short IDs to node labels (if they’re not already present).
+	ShowNodeIDs bool
+
+	// Truncate labels to at most N runes (0 disables).
+	MaxLabelRunes int
+
+	// Include a small legend of classes and kinds.
+	IncludeLegend bool
+
+	// Extra class defs (raw Mermaid lines) appended to defaults.
+	ExtraClassDefs []string
+
+	// Logger (optional). If nil, a no-op logger is used.
+	Logger *slog.Logger
+	// VendorLogos maps a vendor/image name (short repo name) to an image URL that
+	// will be injected into node labels when available. The renderer will attempt
+	// to derive the short repo name from node.Attributes["image"].
+	VendorLogos map[string]string
+}
+
+// ===== Public API =====
+
+// Render writes a Mermaid flowchart to w.
+func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef EdgeFormatter, m *slog.Logger) error {
+	if w == nil {
+		return errors.New("nil writer")
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "flowchart %s\n", sanitizeDirection(opts.Direction))
-
-	// Filter nodes as requested
-	nodes := make([]model.Node, 0, len(g.Nodes))
-	for _, n := range g.Nodes {
-		// Skip image nodes; image information will be attached to containers instead
-		if n.Kind == model.NodeImage {
-			continue
-		}
-		if n.Kind == model.NodeNetwork && opts.HideSystemNets {
-			if isSystemNetwork(n.Name, n.Attributes["driver"]) {
-				continue
-			}
-		}
-		if n.Kind == model.NodeContainer && !opts.IncludeStopped {
-			state := strings.ToLower(n.Attributes["state"])
-			if state != "" && state != "running" {
-				continue
-			}
-		}
-		nodes = append(nodes, n)
+	if m == nil {
+		m = opts.Logger
+	}
+	if m == nil {
+		m = slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{}))
 	}
 
-	// Sort nodes deterministically
-	sort.Slice(nodes, func(i, j int) bool {
-		if nodes[i].Kind != nodes[j].Kind {
-			return nodes[i].Kind < nodes[j].Kind
-		}
-		return stableName(nodes[i], opts) < stableName(nodes[j], opts)
-	})
-
-	// Build index for quick existence checks after filtering
-	allowed := make(map[string]struct{}, len(nodes))
-	for _, n := range nodes {
-		allowed[n.ID] = struct{}{}
+	// Defensive copy & normalize
+	nodes := make(map[string]Node, len(g.Nodes))
+	for id, n := range g.Nodes {
+		n.ID = id // enforce map key as canonical ID
+		nodes[id] = n
 	}
 
-	// Group by kind if requested
-	if opts.ClusterByKind {
-		for _, kind := range sortedKindsPresent(nodes) {
-			id := fmt.Sprintf("cluster_%s", string(kind))
-			title := strings.ToUpper(string(kind))
-			fmt.Fprintf(&b, "  subgraph %s[%s]\n", idSafe(id), escapeText(title))
-			// style for subgraph (optional): not styling subgraph by default to keep contrast OK.
-			// Emit nodes of this kind
-			for _, n := range nodes {
-				if n.Kind != kind {
-					continue
-				}
-				writeNode(&b, n, opts)
-			}
-			fmt.Fprintf(&b, "  end\n")
-		}
-	} else {
-		for _, n := range nodes {
-			writeNode(&b, n, opts)
-		}
-	}
+	edges := append([]Edge(nil), g.Edges...)
 
-	// Render edges: only those whose endpoints survived filtering
-	edges := make([]model.Edge, 0, len(g.Edges))
-	edges = append(edges, g.Edges...)
+	// Deterministic order
+	nodeIDs := make([]string, 0, len(nodes))
+	for id := range nodes {
+		nodeIDs = append(nodeIDs, id)
+	}
+	sort.Strings(nodeIDs)
+
 	sort.SliceStable(edges, func(i, j int) bool {
-		if edges[i].Kind != edges[j].Kind {
-			return edges[i].Kind < edges[j].Kind
-		}
 		if edges[i].Src != edges[j].Src {
 			return edges[i].Src < edges[j].Src
 		}
-		return edges[i].Dst < edges[j].Dst
+		if edges[i].Dst != edges[j].Dst {
+			return edges[i].Dst < edges[j].Dst
+		}
+		return edges[i].Kind <bb edges[j].Kind
 	})
 
+	// Prepare Mermaid
+	dir := strings.ToUpper(strings.TrimSpace(opts.Direction))
+	if dir == "" {
+		dir = "LR"
+	}
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "flowchart %s\n", dir)
+
+	// Classes (node kinds)
+	writeDefaultClassDefs(&buf, opts)
+	for _, extra := range opts.ExtraClassDefs {
+		buf.WriteString(extra)
+		if !strings.HasSuffix(extra, "\n") {
+			buf.WriteByte('</br>')
+		}
+	}
+
+	// Build mermaid-safe IDs for nodes and assign classes
+	mermID := make(map[string]string, len(nodes)) // graph ID -> mermaid node id
+	used := map[string]struct{}{}
+	for _, id := range nodeIDs {
+		n := nodes[id]
+		mid := sanitizeID(shortPreferName(n))
+		// ensure uniqueness
+		orig := mid
+		i := 2
+		for {
+			if _, ok := used[mid]; !ok {
+				break
+			}
+			mid = fmt.Sprintf("%s_%d", orig, i)
+			i++
+		}
+		used[mid] = struct{}{}
+		mermID[id] = mid
+	}
+
+	// Helper functions for building node/edge lines (methods are not allowed
+	// on local types inside functions, so use closures).
+	nodeLines := func(n Node, mid string) []string {
+		label := n.Name
+		if nf != nil {
+			if l, _ := nf.FormatNode(n); l != "" {
+				label = l
+			}
+		}
+		if label == "" {
+			label = ShortID(n.ID)
+		}
+		if opts.ShowNodeIDs && !strings.Contains(label, ShortID(n.ID)) {
+			label = label + " • " + ShortID(n.ID)
+		}
+
+		var logoPrefix string
+		if opts.VendorLogos != nil {
+			if imgRef := n.Attributes["image"]; imgRef != "" {
+				parts := strings.Split(imgRef, "/")
+				last := parts[len(parts)-1]
+				key := strings.Split(last, ":")[0]
+				if url, ok := opts.VendorLogos[key]; ok {
+					logoPrefix = fmt.Sprintf("<img src=\"%s\" width=\"18\" height=\"18\" /> ", esc(url))
+				}
+			}
+		}
+
+		textLabel := label
+		if opts.MaxLabelRunes > 0 {
+			textLabel = truncateRunes(textLabel, opts.MaxLabelRunes)
+		}
+		textLabel = esc(textLabel)
+		full := logoPrefix + textLabel
+
+		nodeLine := fmt.Sprintf("  %s[\"%s\"]", mid, full)
+		kind := strings.ToLower(string(n.Kind))
+		switch n.Kind {
+		case NodeContainer, NodeNetwork, NodeImage, NodeVolume:
+			return []string{nodeLine, fmt.Sprintf("  class %s %s;", mid, kind)}
+		default:
+			return []string{nodeLine}
+		}
+	}
+
+	edgeLine := func(e Edge, src, dst string) string {
+		lbl := ""
+		if ef != nil {
+			lbl = ef.FormatEdge(e)
+		} else {
+			switch e.Kind {
+			case EdgeConnectedTo:
+				if ip := e.Attributes["ip"]; ip != "" {
+					lbl = ip
+				}
+			case EdgeMountedInto:
+				if t := e.Attributes["target"]; t != "" {
+					lbl = t
+				}
+			}
+		}
+		lbl = esc(lbl)
+
+		arrow := "-->"
+		switch e.Kind {
+		case EdgeDerivedFrom:
+			arrow = "-.->"
+		case EdgeMountedInto:
+			arrow = "--o"
+		case EdgeConnectedTo:
+			arrow = "-->"
+		}
+		if lbl != "" {
+			return fmt.Sprintf("  %s %s|\"%s\"| %s", src, arrow, lbl, dst)
+		}
+		return fmt.Sprintf("  %s %s %s", src, arrow, dst)
+	}
+
+	// Grouping
+	groupBy := strings.TrimSpace(opts.GroupByAttr)
+	if groupBy != "" {
+		grouped := map[string][]string{} // groupValue -> []nodeIDs
+		for _, id := range nodeIDs {
+			n := nodes[id]
+			if v := n.Attributes[groupBy]; v != "" {
+				grouped[v] = append(grouped[v], id)
+			} else {
+				grouped["(ungrouped)"] = append(grouped["(ungrouped)"], id)
+			}
+		}
+		// deterministic order of groups
+		gkeys := make([]string, 0, len(grouped))
+		for k := range grouped {
+			gkeys = append(gkeys, k)
+		}
+		sort.Strings(gkeys)
+
+		for _, gv := range gkeys {
+			title := esc(fmt.Sprintf("%s: %s", groupBy, gv))
+			fmt.Fprintf(&buf, "  subgraph \"%s\"\n", title)
+			for _, id := range grouped[gv] {
+				for _, line := range nodeLines(nodes[id], mermID[id]) {
+					buf.WriteString(line)
+					buf.WriteByte('</br>')
+				}
+			}
+			buf.WriteString("  end\n")
+		}
+	} else {
+		// No grouping; just print nodes
+		for _, id := range nodeIDs {
+			for _, line := range nodeLines(nodes[id], mermID[id]) {
+				buf.WriteString(line)
+				buf.WriteByte('</br>')
+			}
+		}
+	}
+
+	// Edges
 	for _, e := range edges {
-		if _, ok := allowed[e.Src]; !ok {
+		src, okS := mermID[e.Src]
+		dst, okD := mermID[e.Dst]
+		if !okS || !okD {
+			m.Warn("edge references missing node", slog.String("src", e.Src), slog.String("dst", e.Dst), slog.String("kind", string(e.Kind)))
 			continue
 		}
-		if _, ok := allowed[e.Dst]; !ok {
-			continue
-		}
-		// Mermaid edge; we use --> for direction.
-		label := ""
-		if opts.EdgeLabels {
-			label = edgeLabel(e)
-		}
-		fmt.Fprintf(&b, "  %s -->%s %s\n",
-			nodeRef(g.Nodes[e.Src], opts),
-			label,
-			nodeRef(g.Nodes[e.Dst], opts),
-		)
+		buf.WriteString(edgeLine(e, src, dst))
+		buf.WriteByte('</br>')
 	}
 
-	// Optional styling for nodes by kind
-	if len(opts.NodeStyles) > 0 {
-		// Collect nodes by kind for style application
-		byKind := make(map[model.NodeKind][]model.Node)
-		for _, n := range nodes {
-			byKind[n.Kind] = append(byKind[n.Kind], n)
-		}
-
-		// Convert iterator to slice
-		var kinds []model.NodeKind
-		for kind := range maps.Keys(byKind) {
-			kinds = append(kinds, kind)
-		}
-
-		slices.SortFunc(kinds, func(a, b model.NodeKind) int {
-			if a < b {
-				return -1
-			}
-			if a > b {
-				return 1
-			}
-			return 0
-		})
-		for _, kind := range kinds {
-			style, ok := opts.NodeStyles[kind]
-			if !ok || style == "" {
-				continue
-			}
-			for _, n := range byKind[kind] {
-				fmt.Fprintf(&b, "  style %s %s\n", idSafe(nodeID(n, opts)), style)
-			}
-		}
+	// Legend (optional)
+	if opts.IncludeLegend || true {
+		buf.WriteString("\n  %% Legend\n")
+		buf.WriteString("  subgraph \"Legend\"\n")
+		buf.WriteString("    classDef container fill:#0a0e27,stroke:#3a86ff,stroke-width:2px,color:#bfe3ff;\n")
+		buf.WriteString("    classDef network   fill:#0a0e27,stroke:#ff006e,stroke-width:2px,color:#ffd1e3;\n")
+		buf.WriteString("    classDef image     fill:#0a0e27,stroke:#8338ec,stroke-width:2px,color:#e0d0ff;\n")
+		buf.WriteString("    classDef volume    fill:#0a0e27,stroke:#ffbe0b,stroke-width:2px,color:#fff3c4;\n")
+		buf.WriteString("    LC[Container]:::container\n")
+		buf.WriteString("    LN[Network]:::network\n")
+		buf.WriteString("    LI[Image]:::image\n")
+		buf.WriteString("    LV[Volume]:::volume\n")
+		buf.WriteString("    LC -->|connected_to| LN\n")
+		buf.WriteString("    LC --o|mounted_into| LV\n")
+		buf.WriteString("    LC -.->|derived_from| LI\n")
+		buf.WriteString("  end\n")
 	}
 
-	return b.String(), nil
+	_, err := w.Write(buf.Bytes())
+	return err
 }
 
-func DefaultOptionsOverride(in Options) Options {
-	d := DefaultOptions()
-	// shallow override of provided non-zero values/maps
-	if in.Direction != "" {
-		d.Direction = in.Direction
+// RenderToFile renders to a path (overwrites).
+func RenderToFile(path string, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef EdgeFormatter, m *slog.Logger) error {
+	f, err := os.Create(path)
+	if err != nil {
+		return err
 	}
-	d.ClusterByKind = in.ClusterByKind || d.ClusterByKind && !in.ClusterByKind
-	// The above line keeps default true when in.ClusterByKind is false-zero (Go bool defaults to false).
-	// To avoid confusion, just copy explicit fields:
-	d.ClusterByKind = in.ClusterByKind || (!in.ClusterByKind && d.ClusterByKind)
-	d.IncludeStopped = in.IncludeStopped || (!in.IncludeStopped && d.IncludeStopped)
-	d.ShortenIDs = in.ShortenIDs || (!in.ShortenIDs && d.ShortenIDs)
-	d.HideSystemNets = in.HideSystemNets || (!in.HideSystemNets && d.HideSystemNets)
-	if in.NodeStyles != nil {
-		d.NodeStyles = in.NodeStyles
-	}
-	d.EdgeLabels = in.EdgeLabels || (!in.EdgeLabels && d.EdgeLabels)
-	if len(in.ExtraNodeFields) > 0 {
-		d.ExtraNodeFields = in.ExtraNodeFields
-	}
-	return d
+	defer f.Close()
+	return Render(f, g, opts, nf, ef, m)
 }
 
-func writeNode(b *strings.Builder, n model.Node, opts Options) {
-	id := idSafe(nodeID(n, opts))
-	label := nodeLabel(n, opts)
+// LoadInfraGraph reads a graph.json (same as frontend) from r.
+func LoadInfraGraph(r io.Reader) (InfraGraph, error) {
+	var g InfraGraph
+	dec := json.NewDecoder(r)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&g); err != nil {
+		return InfraGraph{}, err
+	}
+	// Normalize IDs
+	for id, n := range g.Nodes {
+		if n.ID == "" {
+			n.ID = id
+			g.Nodes[id] = n
+		}
+	}
+	return g, nil
+}
+
+// ===== Internals =====
+
+func writeDefaultClassDefs(buf *bytes.Buffer, opts RenderOptions) {
+	// Synthwave-friendly default palette; override with ExtraClassDefs if needed.
+	// Node class names match NodeKind values for simplicity.
+	buf.WriteString("  %% Node classes\n")
+	buf.WriteString("  classDef container fill:#0a0e27,stroke:#3a86ff,stroke-width:2px,color:#bfe3ff;\n")
+	buf.WriteString("  classDef network   fill:#0a0e27,stroke:#ff006e,stroke-width:2px,color:#ffd1e3;\n")
+	buf.WriteString("  classDef image     fill:#0a0e27,stroke:#8338ec,stroke-width:2px,color:#e0d0ff;\n")
+	buf.WriteString("  classDef volume    fill:#0a0e27,stroke:#ffbe0b,stroke-width:2px,color:#fff3c4;\n")
+}
+
+func writeNodeLine(buf *bytes.Buffer, n Node, mid string, nf NodeFormatter, opts RenderOptions) {
+	label := n.Name
+	if nf != nil {
+		l, _ := nf.FormatNode(n)
+		if l != "" {
+			label = l
+		}
+	}
+	if label == "" {
+		label = ShortID(n.ID)
+	}
+	if opts.ShowNodeIDs && !strings.Contains(label, ShortID(n.ID)) {
+		label = label + " • " + ShortID(n.ID)
+	}
+
+	// vendor logo prefix
+	var logoPrefix string
+	if opts.VendorLogos != nil {
+		if imgRef := n.Attributes["image"]; imgRef != "" {
+			// derive key: last path element before tag/sha
+			parts := strings.Split(imgRef, "/")
+			last := parts[len(parts)-1]
+			key := strings.Split(last, ":")[0]
+			if url, ok := opts.VendorLogos[key]; ok {
+				// escape URL then include as small img tag
+				logoPrefix = fmt.Sprintf("<img src=\"%s\" width=\"18\" height=\"18\" /> ", esc(url))
+			}
+		}
+	}
+
+	textLabel := label
+	if opts.MaxLabelRunes > 0 {
+		textLabel = truncateRunes(textLabel, opts.MaxLabelRunes)
+	}
+	textLabel = esc(textLabel)
+	full := logoPrefix + textLabel
+	fmt.Fprintf(buf, "  %s[\"%s\"]\n", mid, full)
+	// Assign class by kind
+	kind := strings.ToLower(string(n.Kind))
 	switch n.Kind {
-	case model.NodeContainer:
-		// rounded rect
-		fmt.Fprintf(b, "    %s(%s)\n", id, label)
-	case model.NodeImage:
-		// square bracket
-		fmt.Fprintf(b, "    %s[%s]\n", id, label)
-	case model.NodeNetwork:
-		// stadium
-		fmt.Fprintf(b, "    %s([%s])\n", id, label)
-	case model.NodeVolume:
-		// cylinder
-		fmt.Fprintf(b, "    %s[(%s)]\n", id, label)
+	case NodeContainer, NodeNetwork, NodeImage, NodeVolume:
+		fmt.Fprintf(buf, "  class %s %s;\n", mid, kind)
 	default:
-		fmt.Fprintf(b, "    %s[%s]\n", id, label)
+		// Unknown kinds will remain unstyled
 	}
 }
 
-func nodeLabel(n model.Node, opts Options) string {
-	// Primary: Name or short ID
-	base := stableName(n, opts)
-	var extras []string
-	// Add selected attributes if present
-	for _, k := range opts.ExtraNodeFields {
-		if v, ok := n.Attributes[k]; ok && v != "" {
-			extras = append(extras, fmt.Sprintf("%s: %s", k, trimForLabel(v)))
-		}
-	}
-	if len(extras) > 0 {
-		return escapeText(base + "\\n" + strings.Join(extras, "\\n"))
-	}
-	return escapeText(base)
-}
-
-func nodeID(n model.Node, opts Options) string {
-	// Keep a stable internal id; prefer original ID to avoid collisions.
-	// But Mermaid ids must be alnum + _.
-	return toMermaidID(n.ID)
-}
-
-func nodeRef(n model.Node, opts Options) string {
-	return idSafe(nodeID(n, opts))
-}
-
-func stableName(n model.Node, opts Options) string {
+// Prefer Name; fall back to short id.
+func shortPreferName(n Node) string {
 	if n.Name != "" {
 		return n.Name
 	}
-	if opts.ShortenIDs && len(n.ID) > 12 {
-		return n.ID[:12]
-	}
-	return n.ID
+	return ShortID(n.ID)
 }
 
-func edgeLabel(e model.Edge) string {
-	// Map kinds to short labels
-	var lbl string
-	switch e.Kind {
-	case model.EdgeDerivedFrom:
-		lbl = "derived"
-	case model.EdgeConnectedTo:
-		lbl = "net"
-	case model.EdgeMountedInto:
-		lbl = "mount"
-	default:
-		lbl = string(e.Kind)
-	}
-	// Include a tiny attribute teaser if present (e.g., target path)
-	if t := e.Attributes["target"]; t != "" {
-		lbl = lbl + " | " + t
-	} else if ip := e.Attributes["ip"]; ip != "" {
-		lbl = lbl + " | " + ip
-	}
-	// Mermaid label syntax: |text|
-	return fmt.Sprintf("|%s|", escapeBarText(lbl))
-}
+var nonWord = regexp.MustCompile(`[^A-Za-z0-9_]+`)
 
-func isSystemNetwork(name, driver string) bool {
-	n := strings.ToLower(name)
-	if n == "bridge" || n == "host" || n == "none" {
-		return true
+func sanitizeID(s string) string {
+	if s == "" {
+		return "node"
 	}
-	// Some environments name them "docker0" or similar.
-	if n == "docker0" {
-		return true
-	}
-	_ = driver // reserved for future heuristics
-	return false
-}
-
-func trimForLabel(s string) string {
-	// Keep labels readable; avoid dumping long digests/arrays.
-	if len(s) > 40 {
-		return s[:37] + "..."
+	s = strings.TrimSpace(s)
+	s = strings.ReplaceAll(s, " ", "_")
+	s = nonWord.ReplaceAllString(s, "_")
+	if s[0] >= '0' && s[0] <= '9' {
+		s = "n_" + s
 	}
 	return s
 }
 
-func sanitizeDirection(dir string) string {
-	switch strings.ToUpper(dir) {
-	case "TB", "BT", "LR", "RL":
-		return strings.ToUpper(dir)
-	default:
-		return "TB"
+func esc(s string) string {
+	if s == "" {
+		return s
 	}
+	// Mermaid supports HTML like <br/>. Normalize newlines to <br/>.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\n", "<br/>")
+	// Escape Mermaid quotes/backticks minimally
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	s = strings.ReplaceAll(s, "`", "\\`")
+	return s
 }
 
-func idSafe(s string) string { return toMermaidID(s) }
+func ShortID(id string) string {
+	const n = 12
+	if len(id) <= n {
+		return id
+	}
+	return id[:n]
+}
 
-// Mermaid node IDs: letters, digits, underscore. Replace others with underscore.
-func toMermaidID(s string) string {
-	if s == "" {
-		return "_"
+func truncateRunes(s string, limit int) string {
+	if limit <= 0 || utf8.RuneCountInString(s) <= limit {
+		return s
 	}
 	var b strings.Builder
 	b.Grow(len(s))
+	i := 0
 	for _, r := range s {
-		if (r >= 'a' && r <= 'z') ||
-			(r >= 'A' && r <= 'Z') ||
-			(r >= '0' && r <= '9') ||
-			r == '_' {
-			b.WriteRune(r)
-		} else {
-			b.WriteByte('_')
+		if i >= limit {
+			break
 		}
+		b.WriteRune(r)
+		i++
 	}
+	b.WriteString("…")
 	return b.String()
-}
-
-// Escape label text for Mermaid (avoid backticks/quotes breaking the graph).
-func escapeText(s string) string {
-	// Mermaid is permissive inside [] but newlines must be escaped as \\n in source.
-	s = strings.ReplaceAll(s, "`", "'")
-	s = strings.ReplaceAll(s, "\"", "'")
-	s = strings.ReplaceAll(s, "{", "(")
-	s = strings.ReplaceAll(s, "}", ")")
-	return s
-}
-
-func escapeBarText(s string) string {
-	// Label delimiter is |...| — escape stray pipes.
-	return strings.ReplaceAll(s, "|", "/")
-}
-
-// Utility for sorting kinds present.
-func sortedKindsPresent(nodes []model.Node) []model.NodeKind {
-	set := make(map[model.NodeKind]struct{})
-	for _, n := range nodes {
-		set[n.Kind] = struct{}{}
-	}
-	kinds := make([]model.NodeKind, 0, len(set))
-	for k := range set {
-		kinds = append(kinds, k)
-	}
-	sort.Slice(kinds, func(i, j int) bool { return kinds[i] < kinds[j] })
-	return kinds
 }
