@@ -6,7 +6,6 @@ import (
 	"embed"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -179,12 +178,20 @@ func serveRendered(w http.ResponseWriter, r *http.Request, st *store.MemoryStore
 }
 
 func krokiRender(ctx context.Context, mermaidSrc, format string, opts Options) ([]byte, error) {
-	if opts.KrokiURL == "" {
-		return nil, errors.New("kroki url empty")
+	// Determine Kroki base URL: prefer opts, then env, then Docker Compose service default.
+	baseURL := strings.TrimSpace(opts.KrokiURL)
+	if baseURL == "" {
+		// envOr is defined elsewhere in this file and will pick up envrc/.env vars.
+		baseURL = envOr("KROKI_URL", "http://kroki:8000")
 	}
+	// Ensure a scheme is present (Docker Compose service names are typically used with http).
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "http://" + baseURL
+	}
+
 	// POST raw source per Kroki spec: POST {KROKI}/mermaid/{format}
 	// Body is plain text of the diagram.
-	url := strings.TrimRight(opts.KrokiURL, "/") + "/mermaid/" + format
+	url := strings.TrimRight(baseURL, "/") + "/mermaid/" + format
 
 	// Short, sane timeout per request
 	timeout := opts.Timeout
