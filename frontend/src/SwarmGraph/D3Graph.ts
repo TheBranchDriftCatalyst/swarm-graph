@@ -1,4 +1,6 @@
 import * as d3 from 'd3'
+// allow runtime `require` usage in this frontend TS file
+declare const require: any
 import { NodeKind, EdgeKind } from '../types'
 import { colors, nodeIcons } from './SwarmGraphStyles'
 import { drawNodes } from './D3Node'
@@ -92,6 +94,36 @@ export const initGraph = ({
         visibleEdges[l.kind as EdgeKind] && nodeMap[l.src] && nodeMap[l.dst]
     )
     .map((l: any) => ({ ...l, source: nodeMap[l.src], target: nodeMap[l.dst] }))
+  // compute dagre layout to get a Mermaid-like layered flow
+  try {
+    // load dagre at runtime to avoid compile-time type issues
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const dagreLib: any = typeof require !== 'undefined' ? require('dagre') : (window as any).dagre
+    const gDag = new dagreLib.graphlib.Graph({ compound: false })
+    gDag.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 80 })
+    gDag.setDefaultEdgeLabel(() => ({}))
+    // set node sizes to match our card dims
+    const cardW = 160
+    const cardH = 52
+    nodes.forEach((n: any) => {
+      gDag.setNode(n.id, { width: cardW, height: cardH })
+    })
+    links.forEach((l: any) => gDag.setEdge(l.source.id || l.src, l.target.id || l.dst))
+  dagreLib.layout(gDag)
+    // apply dagre positions to nodes and pin them for an initial relaxation
+    nodes.forEach((n: any) => {
+      const dn = gDag.node(n.id)
+      if (dn) {
+        n.x = dn.x
+        n.y = dn.y
+        n.fx = dn.x
+        n.fy = dn.y
+      }
+    })
+  } catch (e) {
+    // layout failed, fall back to force-only
+    Logger.warn('dagre.layout.failed', { message: String(e) })
+  }
 
   const { link: linkSel, labels: labelSel } = drawEdges(g, links)
   const nodeSel = drawNodes(g, nodes, {
