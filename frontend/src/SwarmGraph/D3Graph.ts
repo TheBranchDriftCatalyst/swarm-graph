@@ -120,11 +120,37 @@ export const initGraph = ({
       marginy: 60
     })
     gDag.setDefaultEdgeLabel(() => ({}))
-    // set node sizes to match our card dims with padding
-    const cardW = 200
-    const cardH = 70
+    // set node sizes dynamically based on content
     nodes.forEach((n: any) => {
-      gDag.setNode(n.id, { width: cardW, height: cardH })
+      // Calculate dynamic dimensions for this node (same logic as in D3Node.ts)
+      const name = n.name || n.Name || n.id || ''
+      const status = (n.attributes && n.attributes.status) || ''
+      
+      // Base dimensions
+      const minWidth = 160
+      const minHeight = 60
+      const maxWidth = 280
+      const maxHeight = 80
+      
+      // Calculate width based on content length
+      const nameLength = name.length
+      const hasStatus = status.length > 0
+      const hasAttributes = n.attributes && Object.keys(n.attributes).length > 1
+      
+      // Dynamic width calculation
+      let width = Math.max(minWidth, Math.min(maxWidth, nameLength * 8 + 100))
+      
+      // Dynamic height calculation  
+      let height = minHeight
+      if (hasStatus) {
+        height += 0
+      }
+      if (hasAttributes) {
+        height += 10
+      }
+      height = Math.min(maxHeight, height)
+      
+      gDag.setNode(n.id, { width, height })
     })
     links.forEach((l: any) => gDag.setEdge(l.source.id || l.src, l.target.id || l.dst))
     dagreLib.layout(gDag)
