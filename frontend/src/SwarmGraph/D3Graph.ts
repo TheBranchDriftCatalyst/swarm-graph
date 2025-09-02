@@ -34,39 +34,51 @@ export const initGraph = ({
 
   const { width, height } = dimensions
 
-  // background gradient + grid
+  // background gradient + grid with enhanced styling
   const defs = svg.append('defs')
+  
+  // Enhanced background gradient
   const bgGradient = defs
-    .append('linearGradient')
+    .append('radialGradient')
     .attr('id', 'bg-gradient')
-    .attr('x1', '0%')
-    .attr('y1', '0%')
-    .attr('x2', '100%')
-    .attr('y2', '100%')
-  bgGradient.append('stop').attr('offset', '0%').style('stop-color', '#0A0E27')
-  bgGradient
-    .append('stop')
-    .attr('offset', '100%')
-    .style('stop-color', '#1A1E3A')
+    .attr('cx', '50%')
+    .attr('cy', '50%')
+    .attr('r', '70%')
+  bgGradient.append('stop').attr('offset', '0%').style('stop-color', '#1A1E3A')
+  bgGradient.append('stop').attr('offset', '50%').style('stop-color', '#0A0E27')
+  bgGradient.append('stop').attr('offset', '100%').style('stop-color', '#050817')
+  
   svg
     .append('rect')
     .attr('width', width)
     .attr('height', height)
     .attr('fill', 'url(#bg-gradient)')
 
+  // More sophisticated grid pattern
   const grid = defs
     .append('pattern')
     .attr('id', 'grid')
-    .attr('width', 40)
-    .attr('height', 40)
+    .attr('width', 60)
+    .attr('height', 60)
     .attr('patternUnits', 'userSpaceOnUse')
+  
+  // Dot grid instead of lines for a more modern look
   grid
-    .append('path')
-    .attr('d', 'M 40 0 L 0 0 0 40')
-    .attr('fill', 'none')
-    .attr('stroke', colors.grid as string)
-    .attr('stroke-width', '0.5')
-    .attr('opacity', '0.3')
+    .append('circle')
+    .attr('cx', 30)
+    .attr('cy', 30)
+    .attr('r', 1)
+    .attr('fill', colors.grid as string)
+    .attr('opacity', '0.4')
+  
+  grid
+    .append('circle')
+    .attr('cx', 0)
+    .attr('cy', 0)
+    .attr('r', 0.5)
+    .attr('fill', colors.grid as string)
+    .attr('opacity', '0.2')
+    
   svg
     .append('rect')
     .attr('width', width)
@@ -100,24 +112,36 @@ export const initGraph = ({
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const dagreLib: any = typeof require !== 'undefined' ? require('dagre') : (window as any).dagre
     const gDag = new dagreLib.graphlib.Graph({ compound: false })
-    gDag.setGraph({ rankdir: 'LR', nodesep: 50, ranksep: 80 })
+    gDag.setGraph({ 
+      rankdir: 'LR', 
+      nodesep: 120, 
+      ranksep: 180,
+      marginx: 60,
+      marginy: 60
+    })
     gDag.setDefaultEdgeLabel(() => ({}))
-    // set node sizes to match our card dims
-    const cardW = 160
-    const cardH = 52
+    // set node sizes to match our card dims with padding
+    const cardW = 200
+    const cardH = 70
     nodes.forEach((n: any) => {
       gDag.setNode(n.id, { width: cardW, height: cardH })
     })
     links.forEach((l: any) => gDag.setEdge(l.source.id || l.src, l.target.id || l.dst))
-  dagreLib.layout(gDag)
-    // apply dagre positions to nodes and pin them for an initial relaxation
+    dagreLib.layout(gDag)
+    
+    // apply dagre positions to nodes with centering offset
+    const graphBounds = gDag.graph()
+    const offsetX = (width - graphBounds.width) / 2
+    const offsetY = (height - graphBounds.height) / 2
+    
     nodes.forEach((n: any) => {
       const dn = gDag.node(n.id)
       if (dn) {
-        n.x = dn.x
-        n.y = dn.y
-        n.fx = dn.x
-        n.fy = dn.y
+        n.x = dn.x + offsetX
+        n.y = dn.y + offsetY
+        // Fix positions from dagre layout to prevent overlap
+        n.fx = n.x
+        n.fy = n.y
       }
     })
   } catch (e) {
@@ -144,28 +168,35 @@ export const initGraph = ({
         .id((d: any) => d.id)
         .distance((d: any) => {
           switch (d.kind) {
-          case 'derived_from': return 120
-          case 'connected_to': return 180
-          case 'mounted_into': return 140
-          default: return 120
+          case 'derived_from': return 200
+          case 'connected_to': return 250
+          case 'mounted_into': return 200
+          default: return 200
           }
         })
+        .strength(0.1)
     )
-    .force('charge', d3.forceManyBody().strength(-80))
-    .force('center', d3.forceCenter(width / 2, height / 2))
-    .force('collision', d3.forceCollide().radius(60))
-    .alphaDecay(0.02)
+    .force('charge', d3.forceManyBody().strength(-300))
+    .force('collision', d3.forceCollide().radius(120))
+    .alphaDecay(0.1)
+    .alpha(0.1)
 
   sim.on('tick', () => {
+    // Use straight lines instead of curves for cleaner appearance
     linkSel
       .attr('x1', (d: any) => d.source.x)
       .attr('y1', (d: any) => d.source.y)
       .attr('x2', (d: any) => d.target.x)
       .attr('y2', (d: any) => d.target.y)
-    // position labels at midpoints
+    
+    // Position label groups at midpoints
     labelSel
-      .attr('x', (d: any) => ((d.source.x + d.target.x) / 2))
-      .attr('y', (d: any) => ((d.source.y + d.target.y) / 2))
+      .attr('transform', (d: any) => {
+        const midX = (d.source.x + d.target.x) / 2
+        const midY = (d.source.y + d.target.y) / 2
+        return `translate(${midX}, ${midY})`
+      })
+    
     nodeSel.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
   })
 
@@ -174,7 +205,9 @@ export const initGraph = ({
   // nodes from becoming permanently fixed when the sim cools.
   const drag = d3.drag<SVGGElement, any>()
     .on('start', (event, d: any) => {
-      if (!event.active) sim.alphaTarget(0.3).restart()
+      if (!event.active) {
+        sim.alphaTarget(0.3).restart()
+      }
       d.fx = d.x
       d.fy = d.y
     })
@@ -184,7 +217,9 @@ export const initGraph = ({
     })
     .on('end', (event, d: any) => {
       // lower the alpha target and let the sim settle
-      if (!event.active) sim.alphaTarget(0)
+      if (!event.active) {
+        sim.alphaTarget(0)
+      }
       // clear fixed position so node can continue to be simulated
       d.fx = null
       d.fy = null

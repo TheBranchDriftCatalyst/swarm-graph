@@ -1,27 +1,27 @@
 import { CSSProperties } from 'react'
-import { NodeKind, EdgeKind } from './types'
+import { NodeKind, EdgeKind } from '../types'
 
 export const colors: { [k: string]: any; edge: Record<EdgeKind, string> } = {
-  container: '#FF006E',
-  network: '#FFBE0B',
-  image: '#FB5607',
-  volume: '#8338EC',
+  container: '#00D4FF',     // Bright cyan for containers
+  network: '#FFD700',       // Golden yellow for networks  
+  image: '#FF6B35',         // Orange-red for images
+  volume: '#9D4EDD',        // Purple for volumes
   background: '#0A0E27',
-  grid: '#1E2749',
-  glow: '#3A86FF',
-  text: '#F72585',
+  grid: '#2A3B5C',          // Lighter grid for better visibility
+  glow: '#00D4FF',
+  text: '#FFFFFF',
   edge: {
-    derived_from: '#FF006E',
-    connected_to: '#3A86FF',
-    mounted_into: '#FFBE0B',
+    derived_from: '#FF6B35',    // Orange for image derivation
+    connected_to: '#00D4FF',    // Cyan for network connections
+    mounted_into: '#FFD700',    // Gold for volume mounts
   },
 }
 
 export const nodeIcons: Record<NodeKind, string> = {
-  container: '⬢',
-  network: '◈',
-  image: '◉',
-  volume: '▣',
+  container: '📦',  // More intuitive container icon
+  network: '🌐',   // Globe for network
+  image: '💿',     // Disc for image
+  volume: '💾',    // Floppy disk for volume
 }
 
 export const styles: {
@@ -45,41 +45,45 @@ export const styles: {
     position: 'absolute',
     top: 20,
     left: 20,
-    background: 'rgba(10, 14, 39, 0.8)',
-    border: '1px solid #FF006E',
-    borderRadius: '8px',
-    padding: '12px',
+    background: 'rgba(10, 14, 39, 0.95)',
+    border: '2px solid #00D4FF',
+    borderRadius: '12px',
+    padding: '16px',
     color: '#FFFFFF',
-    boxShadow: '0 0 20px rgba(255, 0, 110, 0.5)',
-    backdropFilter: 'blur(10px)',
+    boxShadow: '0 8px 32px rgba(0, 212, 255, 0.3)',
+    backdropFilter: 'blur(16px)',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   legendTitle: {
-    margin: '0 0 10px 0',
-    color: '#FF006E',
-    textShadow: '0 0 5px currentColor',
+    margin: '0 0 12px 0',
+    color: '#00D4FF',
+    textShadow: '0 0 8px currentColor',
+    fontSize: '14px',
+    fontWeight: '700',
   },
   legendList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '6px',
+    gap: '8px',
     maxHeight: '60vh',
     overflowY: 'auto',
-    paddingRight: 6,
+    paddingRight: 8,
   },
   infoPanel: {
     position: 'absolute',
     top: 20,
     right: 20,
-    background: 'rgba(10, 14, 39, 0.9)',
-    border: '1px solid #3A86FF',
-    borderRadius: '8px',
-    padding: '15px',
+    background: 'rgba(10, 14, 39, 0.95)',
+    border: '2px solid #00D4FF',
+    borderRadius: '12px',
+    padding: '18px',
     color: '#FFFFFF',
-    maxWidth: '300px',
+    maxWidth: '320px',
     maxHeight: '60vh',
     overflowY: 'auto',
-    boxShadow: '0 0 20px rgba(58, 134, 255, 0.5)',
-    backdropFilter: 'blur(10px)',
+    boxShadow: '0 8px 32px rgba(0, 212, 255, 0.3)',
+    backdropFilter: 'blur(16px)',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
   },
   title: {
     position: 'absolute',
