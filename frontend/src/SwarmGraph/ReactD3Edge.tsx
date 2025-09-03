@@ -28,6 +28,62 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
       const { target } = data.attributes
       return target.length > 12 ? target.substring(0, 12) + '...' : target
     }
+    // If Traefik/DNS style labels exist on the connected nodes, show them
+    try {
+      const src: any = (data as any).src
+      const dst: any = (data as any).dst
+
+      const labelCandidates: string[] = []
+
+      const readLabels = (node: any) => {
+        if (!node) {
+          return
+        }
+        // support both attributes.labels and attributes.Labels (Docker variants)
+        const attrs = node.attributes || {}
+        const labels = attrs.labels || attrs.Labels || (node.get ? node.get('attributes.labels') || node.get('attributes.Labels') : null)
+        if (labels && typeof labels === 'object') {
+          Object.entries(labels).forEach(([k, v]) => {
+            if (k && String(k).startsWith('traefik')) {
+              labelCandidates.push(String(v))
+            }
+          })
+        }
+      }
+
+      readLabels(src)
+      readLabels(dst)
+
+      if (labelCandidates.length > 0) {
+        // Try to extract Host(`...`) or hostnames from the label values
+        const hosts: string[] = []
+        const hostRe = /Host\(`([^`]+)`\)/i
+        labelCandidates.forEach((val) => {
+          const m = String(val).match(hostRe)
+          if (m && m[1]) {
+            hosts.push(m[1])
+          } else {
+            // fallback: if the value looks like a hostname, push it, otherwise push the raw label value
+            const maybe = String(val)
+            if (maybe.includes('`')) {
+              hosts.push(maybe.replace(/`/g, ''))
+            } else if (maybe.length < 32) {
+              hosts.push(maybe)
+            } else {
+              hosts.push(maybe.substring(0, 30) + '...')
+            }
+          }
+        })
+
+        if (hosts.length > 0) {
+          const uniq = Array.from(new Set(hosts))
+          const joined = uniq.join(', ')
+          return joined.length > 20 ? joined.substring(0, 20) + '...' : joined
+        }
+      }
+    } catch (err) {
+      // ignore failures and fall through to default
+    }
     return null
   }
 

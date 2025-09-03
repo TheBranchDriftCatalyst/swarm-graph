@@ -25,6 +25,15 @@ const Legend: React.FC<LegendProps> = ({
   <div style={styles.legend}>
     <h3 style={styles.legendTitle}>DOCKER SWARM</h3>
 
+    {/* Layout selector */}
+    <div style={{ marginBottom: 10 }}>
+      <div style={{ fontSize: 12, color: '#BFD8FF', marginBottom: 6 }}>Layout</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('layout.change', { detail: 'force' }))} style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.04)', color: '#cfe' }}>Force</button>
+        <button onClick={() => window.dispatchEvent(new CustomEvent('layout.change', { detail: 'structured' }))} style={{ padding: '6px 10px', borderRadius: 6, background: 'transparent', border: '1px solid rgba(255,255,255,0.04)', color: '#cfe' }}>Structured</button>
+      </div>
+    </div>
+
     <div style={{ marginBottom: 8, fontSize: 13 }}>
       <div style={{ marginBottom: 6, fontWeight: 600, color: '#BFD8FF' }}>
         Show nodes

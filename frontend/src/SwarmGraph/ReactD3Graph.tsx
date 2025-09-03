@@ -6,6 +6,7 @@ import { colors } from './SwarmGraphStyles'
 import { NodeKind, EdgeKind } from '../types'
 import { NodeData, EdgeData, ReactD3GraphProps } from './interfaces'
 import { enrichGraph, NodeWithHelpers, EdgeWithHelpers } from './utils/GraphNavigator'
+import { applyStructuredLayout } from './utils/layouts'
 import { Logger } from '../utils'
 
 const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
@@ -24,15 +25,17 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   const [edges, setEdges] = useState<EdgeWithHelpers[] | EdgeData[]>([])
   const [zoomScale, setZoomScale] = useState<number>(1)
   const simulationRef = useRef<d3.Simulation<any, undefined> | null>(null)
+  const chargeForceRef = useRef<any>(null)
+  const prevNodeCountRef = useRef<number>(0)
 
   // Initialize graph data and simulation
   useEffect(() => {
-    if (!data || !svgRef.current) {
+  if (!data || !svgRef.current) { 
       return
     }
 
     const { width, height } = dimensions
-    // Enrich graph data with navigation helpers and then filter
+  // Enrich graph data with navigation helpers and then filter
     const enriched = enrichGraph(data)
 
     // Convert enriched map into arrays and apply visibility filters
@@ -43,6 +46,27 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     const filteredLinks = rawLinks.filter(
       (l) => visibleEdges[l.kind as EdgeKind] && l.source && l.target
     )
+
+    // If user selected structured layout via window event, apply it
+    // Note: this is a lightweight approach; a future refactor can move layout state to context hook
+    const layoutListener = (e: any) => {
+      const kind = e?.detail
+      if (kind === 'structured') {
+        applyStructuredLayout(filteredNodes as any, { width, height })
+      }
+      if (kind === 'force') {
+        // release fixed positions for force layout
+        filteredNodes.forEach((n) => {
+          n.fx = null
+          n.fy = null
+        })
+      }
+    }
+
+    // Apply default structured layout if window initial setting exists
+    // (this allows toggling without context wiring)
+    // listen for events
+    window.addEventListener('layout.change', layoutListener)
 
     // Apply Dagre layout for initial positioning
     try {
@@ -90,9 +114,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
       Logger.warn('dagre.layout.failed', { message: String(e) })
     }
 
-    // Set up D3 force simulation
-    const simulation = d3
-      .forceSimulation(filteredNodes)
+  // Set up D3 force simulation (tuned for larger graphs)
+  const simulation = d3.forceSimulation(filteredNodes)
       .force(
         'link',
         d3
@@ -110,17 +133,54 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
                 return 200
             }
           })
-          .strength(0.1)
+          // slightly lower strength so links don't overpower layout
+          .strength(0.08)
       )
-      .force('charge', d3.forceManyBody().strength(-300))
-      .force('collision', d3.forceCollide().radius(120))
-      .alphaDecay(0.1)
-      .alpha(0.1)
+  // Reduce charge magnitude so nodes don't push too far apart and create a less "bouncy" layout
+  .force('charge', d3.forceManyBody().strength(-80))
+      // Smaller collision radius to allow tighter packing when needed
+      .force('collision', d3.forceCollide().radius(60))
+      // slower decay so layout stabilizes smoothly for larger graphs
+      .alphaDecay(0.05)
+      .alpha(0.2)
 
     simulation.on('tick', () => {
       setNodes([...filteredNodes])
       setEdges([...filteredLinks])
     })
+
+    // capture the many-body (charge) force so we can tweak it later for rebalancing
+    try {
+      const f = (simulation.force as any) ? (simulation.force as any)('charge') : null
+      if (f) {
+        chargeForceRef.current = f
+      }
+    } catch (e) {}
+
+    // If node count increased, temporarily increase repulsion and reheat the simulation
+    const prevCount = prevNodeCountRef.current || 0
+    const newCount = filteredNodes.length
+    if (newCount > prevCount && simulationRef.current) {
+      try {
+        // bump charge strength proportional to growth
+        const boost = Math.min(3, Math.max(1.2, newCount / Math.max(1, prevCount || 1)))
+        if (chargeForceRef.current && typeof chargeForceRef.current.strength === 'function') {
+          // current strength is negative (repulsive); multiply magnitude
+          const current = -80
+          chargeForceRef.current.strength(-Math.abs(current * boost))
+        }
+        // reheat simulation
+        simulation.alpha(0.6)
+        simulation.restart()
+        // decay back after a short timeout
+        setTimeout(() => {
+          if (chargeForceRef.current && typeof chargeForceRef.current.strength === 'function') {
+            chargeForceRef.current.strength(-80)
+          }
+        }, 1200)
+      } catch (e) {}
+    }
+    prevNodeCountRef.current = newCount
 
     simulationRef.current = simulation
     setNodes(filteredNodes)
@@ -132,7 +192,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     })
 
     return () => {
-      simulation.stop()
+  simulation.stop()
+  window.removeEventListener('layout.change', layoutListener)
     }
   }, [data, dimensions, visibleNodes, visibleEdges])
 
@@ -170,8 +231,9 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     if (!event.active) {
       simulationRef.current.alphaTarget(0)
     }
-    node.fx = null
-    node.fy = null
+  // Make the node sticky at its new position so user moves persist
+  node.fx = node.x
+  node.fy = node.y
   }
 
   // Zoom / pan setup
@@ -184,7 +246,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
 
     const zoom = d3
       .zoom<SVGSVGElement, unknown>()
-      .scaleExtent([0.25, 3])
+    .scaleExtent([0.25, 8])
       .on('zoom', (event) => {
         zoomLayer.attr('transform', event.transform.toString())
         // Keep current scale in React state for nodes to react to
@@ -335,6 +397,13 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave(node.id)}
               onClick={handleNodeClick(node.id)}
+              onDoubleClick={() => {
+                // release stickiness
+                try {
+                  node.fx = null
+                  node.fy = null
+                } catch (e) {}
+              }}
               onDragStart={handleDragStart(node)}
               onDrag={handleDrag(node)}
               onDragEnd={handleDragEnd(node)}

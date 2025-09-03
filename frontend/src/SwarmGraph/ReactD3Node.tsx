@@ -19,6 +19,7 @@ interface ReactD3NodeProps {
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   onClick?: () => void
+  onDoubleClick?: () => void
   onDragStart?: (event: any) => void
   onDrag?: (event: any) => void
   onDragEnd?: (event: any) => void
@@ -68,6 +69,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   onMouseEnter,
   onMouseLeave,
   onClick,
+  onDoubleClick,
   onDragStart,
   onDrag,
   onDragEnd,
@@ -120,17 +122,20 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
         ? '#FF6B6B'
         : '#FFA500'
 
+  // Make node visual size responsive to zoom; we clamp scale to keep labels readable
+  const visualScale = Math.max(0.5, Math.min(1.2, 1 / effectiveZoom))
+  const visualWidth = width * visualScale
+  const visualHeight = height * visualScale
+
   return (
     <g
       ref={groupRef}
-      transform={`translate(${data.x || 0}, ${data.y || 0}) scale(${Math.max(
-        0.5,
-        Math.min(1.6, 1 / effectiveZoom)
-      )})`}
+      transform={`translate(${data.x || 0}, ${data.y || 0}) scale(${visualScale})`}
       style={{ cursor: 'pointer', opacity: isDimmed ? 0.35 : 1, filter: isSelected || isHovered ? 'url(#node-glow)' : undefined }}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-      onClick={onClick}
+  onMouseEnter={onMouseEnter}
+  onMouseLeave={onMouseLeave}
+  onClick={onClick}
+  onDoubleClick={onDoubleClick}
       onMouseDown={(e) => {
         try {
           e.stopPropagation()
@@ -144,12 +149,12 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
     >
       {/* Card background */}
       <rect
-        x={-width / 2}
-        y={-height / 2}
+        x={-visualWidth / 2}
+        y={-visualHeight / 2}
         rx={8}
         ry={8}
-        width={width}
-        height={height}
+        width={visualWidth}
+        height={visualHeight}
         fill={`url(#gradient-${data.kind})`}
         stroke={colors[data.kind] || '#888'}
         strokeWidth={isHovered ? 3 : 2}
@@ -157,11 +162,11 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
       />
 
   {/* Icon or Logo (delegated to NodeType component for easier extraction) */}
-  <TypeComponent data={data} width={width} height={height} pad={pad} imgSize={imgSize} showLogo={showLogo} />
+  <TypeComponent data={data} width={visualWidth} height={visualHeight} pad={pad} imgSize={Math.round(imgSize * visualScale)} showLogo={showLogo} />
 
       {/* Name */}
       <text
-        x={-width / 2 + pad + imgSize + 12}
+        x={-visualWidth / 2 + pad + imgSize + 12}
         y={-8}
         textAnchor="start"
         fontSize={13}
@@ -174,7 +179,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
       {/* Status */}
       {status && (
         <text
-          x={-width / 2 + pad + imgSize + 12}
+          x={-visualWidth / 2 + pad + imgSize + 12}
           y={10}
           textAnchor="start"
           fontSize={10}
@@ -188,8 +193,8 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
       {/* Status indicator */}
       {status && (
         <circle
-          cx={width / 2 - pad - 8}
-          cy={-height / 2 + pad + 8}
+          cx={visualWidth / 2 - pad - 8}
+          cy={-visualHeight / 2 + pad + 8}
           r={4}
           fill={statusColor}
           opacity={0.9}
@@ -198,8 +203,8 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
 
       {/* Type indicator */}
       <text
-        x={width / 2 - pad - 4}
-        y={height / 2 - pad + 2}
+        x={visualWidth / 2 - pad - 4}
+        y={visualHeight / 2 - pad + 2}
         textAnchor="end"
         fontSize={9}
         fill={colors[data.kind]}

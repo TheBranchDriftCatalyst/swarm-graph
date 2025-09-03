@@ -12,6 +12,7 @@ export interface GraphState {
   hoveredNode: string | null
   selectedNode: string | null
   dimensions: { width: number; height: number }
+  layout: 'force' | 'structured'
 }
 
 // Action types
@@ -25,6 +26,7 @@ type GraphAction =
   | { type: 'TOGGLE_NODE_VISIBILITY'; payload: NodeKind }
   | { type: 'TOGGLE_EDGE_VISIBILITY'; payload: EdgeKind }
   | { type: 'RESET_FILTERS' }
+  | { type: 'SET_LAYOUT'; payload: 'force' | 'structured' }
 
 // Default state
 const defaultFilters: GraphFilters = {
@@ -55,6 +57,7 @@ const initialState: GraphState = {
   hoveredNode: null,
   selectedNode: null,
   dimensions: { width: window.innerWidth, height: window.innerHeight },
+  layout: 'force',
 }
 
 // Reducer
@@ -110,6 +113,8 @@ function graphReducer(state: GraphState, action: GraphAction): GraphState {
         ...state,
         filters: defaultFilters
       }
+    case 'SET_LAYOUT':
+      return { ...state, layout: action.payload }
     
     default:
       return state
