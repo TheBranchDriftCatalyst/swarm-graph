@@ -12,13 +12,13 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"text/template"
 	"time"
 
 	"swarm-graph/internal/mermaid"
 	"swarm-graph/internal/store"
+	"swarm-graph/internal/utils"
 )
 
 /*
@@ -27,7 +27,7 @@ import (
      GET /graph.json  -> Graph snapshot (application/json)
      GET /graph.svg   -> Rendered SVG via Kroki
      GET /graph.png   -> Rendered PNG via Kroki
-     GET /graph.html  -> Client-side HTML viewer with embedded mermaid.js
+     GET /docker/inspect -> Docker resource inspection via API (application/json)
      GET /health      -> "ok"
 */
 
@@ -89,35 +89,13 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 		serveRendered(w, r, st, opts, log, "png", "image/png")
 	})
 
-	// Client-side HTML viewer
-	mux.HandleFunc("/graph.html", func(w http.ResponseWriter, r *http.Request) {
-		g := st.Snapshot()
-		txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
-		if err != nil {
-			httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
-			return
-		}
-
-		etag := etagFor(txt + "|html")
-		if checkIfNoneMatch(w, r, etag) {
-			return
-		}
-
-		setCommonHeaders(w, "text/html; charset=utf-8", etag, 0)
-		_ = tmplGraphHTML.Execute(w, struct {
-			Diagram string
-		}{
-			Diagram: txt,
-		})
-	})
-
 	// Health
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		setCommonHeaders(w, "text/plain; charset=utf-8", "", 0)
 		_, _ = io.WriteString(w, "ok")
 	})
 
-	// Docker inspect proxy: returns `docker inspect <id>` output as JSON
+	// Docker inspect proxy: returns inspect data using Docker API
 	// Query param: id=<container-or-task-id>
 	mux.HandleFunc("/docker/inspect", func(w http.ResponseWriter, r *http.Request) {
 		id := strings.TrimSpace(r.URL.Query().Get("id"))
@@ -126,24 +104,32 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 			return
 		}
 
-		// Short timeout for docker CLI calls
+		// Create Docker client
+		dockerClient, err := utils.NewDockerClient(log)
+		if err != nil {
+			httpError(log, w, r, http.StatusInternalServerError, "failed to create docker client: %v", err)
+			return
+		}
+		defer dockerClient.Close()
+
+		// Short timeout for docker API calls
 		ctx := r.Context()
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
-		cmd := exec.CommandContext(ctx, "docker", "inspect", id)
-		out, err := cmd.CombinedOutput()
+		// Try to inspect the resource
+		data, err := dockerClient.InspectAny(ctx, id)
 		if err != nil {
-			// Log warning and return a 500 with the CLI output for easier debugging
-			log.Warn("docker inspect failed", "id", id, "err", err.Error(), "output", string(out))
+			// Log warning and return a 500 with error message for easier debugging
+			log.Warn("docker inspect failed", "id", id, "err", err.Error())
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			http.Error(w, fmt.Sprintf("docker inspect error: %s\n%s", err.Error(), string(out)), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("docker inspect error: %s", err.Error()), http.StatusInternalServerError)
 			return
 		}
 
-		// Return the raw JSON from docker inspect
+		// Return the JSON from docker inspect
 		setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
-		_, _ = w.Write(out)
+		_, _ = w.Write(data)
 	})
 
 	// Optional: static UI at /assets/
@@ -330,35 +316,6 @@ func envOr(k, def string) string {
 
 /* ---------- tiny HTML viewers (embedded) ---------- */
 
-// Minimal HTML viewer: renders the provided Mermaid text client-side.
-var tmplGraphHTML = template.Must(template.New("graph").Parse(`<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Swarm Graph</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root { color-scheme: dark light; }
-    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Cantarell, 'Helvetica Neue', Arial; }
-    .wrap { padding: 12px; }
-    .mermaid { border: 1px solid #4444; border-radius: 12px; padding: 12px; }
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="mermaid">{{ .Diagram }}</div>
-  </div>
-  <!-- Mermaid runtime (small, vendored) -->
-  <script>
-  // Lightweight loader for Mermaid; version can be swapped in assets if needed.
-  </script>
-  <script type="module">
-    import mermaid from "/assets/mermaid.esm.mjs";
-    mermaid.initialize({ startOnLoad: true, theme: (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default') });
-  </script>
-</body>
-</html>`))
-
 // Fallback page shown when Kroki is unavailable.
 var tmplFallbackHTML = template.Must(template.New("fallback").Parse(`<!doctype html>
 <html>
@@ -370,8 +327,7 @@ var tmplFallbackHTML = template.Must(template.New("fallback").Parse(`<!doctype h
 <body>
   <h1>Kroki unavailable</h1>
   <p>{{ .Error }}</p>
-  <p>Rendering client-side below:</p>
+  <p>Diagram source:</p>
   <textarea readonly>{{ .Diagram }}</textarea>
-  <iframe src="/graph.html" style="width:100%;height:50vh;border:1px solid #ccc;border-radius:8px"></iframe>
 </body>
 </html>`))

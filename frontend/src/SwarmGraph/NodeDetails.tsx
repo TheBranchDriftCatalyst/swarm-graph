@@ -32,7 +32,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
       // Abort after 6s in case server is slow
       const timeout = setTimeout(() => controller.abort(), 6000)
       try {
-        const res = await fetch(`/docker/inspect?id=${encodeURIComponent(id)}`, {
+        const res = await fetch(`localhost:9123/docker/inspect?id=${encodeURIComponent(id)}`, {
           signal: controller.signal,
         })
         clearTimeout(timeout)
