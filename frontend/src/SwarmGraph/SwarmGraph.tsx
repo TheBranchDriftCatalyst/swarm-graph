@@ -37,6 +37,83 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
   const { filters, toggleNodeVisibility, toggleEdgeVisibility, excludeNode } = useGraphFilters()
   const [filterPanelVisible, setFilterPanelVisible] = useState(false)
 
+  // Download function to export the graph as PNG
+  const downloadGraphAsPng = async () => {
+    try {
+      // Find the SVG element
+      const svgElement = document.querySelector('svg') as SVGElement
+      if (!svgElement) {
+        console.error('SVG element not found')
+        return
+      }
+
+      // Clone the SVG to avoid modifying the original
+      const svgClone = svgElement.cloneNode(true) as SVGElement
+      
+      // Ensure all styles are applied inline for proper rendering
+      const allElements = svgClone.querySelectorAll('*')
+      allElements.forEach((element) => {
+        const computedStyle = window.getComputedStyle(element as Element)
+        const styleString = Array.from(computedStyle).reduce((str, property) => {
+          return `${str}${property}:${computedStyle.getPropertyValue(property)};`
+        }, '')
+        ;(element as HTMLElement).style.cssText = styleString
+      })
+
+      // Create a canvas to render the SVG
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) {
+        console.error('Canvas context not available')
+        return
+      }
+
+      // Set canvas size to match SVG dimensions
+      const svgRect = svgElement.getBoundingClientRect()
+      canvas.width = svgRect.width * 2 // 2x for better quality
+      canvas.height = svgRect.height * 2
+      ctx.scale(2, 2) // Scale up for better quality
+
+      // Convert SVG to image
+      const svgData = new XMLSerializer().serializeToString(svgClone)
+      const img = new Image()
+      
+      img.onload = () => {
+        // Fill background with dark color to match the graph background
+        ctx.fillStyle = '#050817'
+        ctx.fillRect(0, 0, canvas.width / 2, canvas.height / 2)
+        
+        // Draw the SVG image onto the canvas
+        ctx.drawImage(img, 0, 0)
+        
+        // Create download link
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `swarm-graph-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.png`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+          }
+        }, 'image/png')
+      }
+
+      img.onerror = (error) => {
+        console.error('Error loading SVG image:', error)
+      }
+
+      // Create blob URL for the SVG
+      const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' })
+      const svgUrl = URL.createObjectURL(svgBlob)
+      img.src = svgUrl
+    } catch (error) {
+      console.error('Error downloading graph:', error)
+    }
+  }
+
   // Update raw data when props change
   useEffect(() => {
     if (data) {
@@ -213,6 +290,38 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
         }}
       >
         {orthogonalEdges ? '📐 ORTHOGONAL' : '📏 STRAIGHT'}
+      </button>
+
+      {/* Download Button */}
+      <button
+        style={{
+          position: 'fixed',
+          top: '140px',
+          right: filterPanelVisible ? '440px' : '20px',
+          padding: '12px 16px',
+          backgroundColor: 'rgba(46, 204, 113, 0.2)',
+          border: '2px solid #2ECC71',
+          borderRadius: '12px',
+          color: '#2ECC71',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(46, 204, 113, 0.3)',
+          transition: 'all 0.3s ease',
+          zIndex: 1000,
+        }}
+        onClick={downloadGraphAsPng}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(46, 204, 113, 0.3)'
+          e.currentTarget.style.transform = 'translateY(-1px)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = 'rgba(46, 204, 113, 0.2)'
+          e.currentTarget.style.transform = 'translateY(0px)'
+        }}
+      >
+        📥 DOWNLOAD PNG
       </button>
       
       <FilterPanel 
