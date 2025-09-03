@@ -24,6 +24,11 @@ export const useGraphState = () => {
     dispatch({ type: 'SET_DIMENSIONS', payload: dimensions })
   }
 
+  // Layout handler
+  const setLayout = (layout: 'force' | 'structured') => {
+    dispatch({ type: 'SET_LAYOUT', payload: layout })
+  }
+
   // Window resize handler
   useEffect(() => {
     const handleResize = () => {
@@ -63,6 +68,7 @@ export const useGraphState = () => {
     hoveredNode: state.hoveredNode,
     selectedNode: state.selectedNode,
     dimensions: state.dimensions,
+  layout: state.layout,
     filters: state.filters,
 
     // Actions
@@ -70,6 +76,7 @@ export const useGraphState = () => {
     setHoveredNode,
     setSelectedNode,
     setDimensions,
+  setLayout,
 
     // Helpers
     getNodeInfo,

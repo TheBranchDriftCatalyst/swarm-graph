@@ -6,6 +6,7 @@ import { colors } from './SwarmGraphStyles'
 import { NodeKind, EdgeKind } from '../types'
 import { NodeData, EdgeData, ReactD3GraphProps } from './interfaces'
 import { enrichGraph, NodeWithHelpers, EdgeWithHelpers } from './utils/GraphNavigator'
+import { useGraphState } from './hooks/useGraphState'
 import { applyStructuredLayout } from './utils/layouts'
 import { Logger } from '../utils'
 
@@ -29,6 +30,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   const prevNodeCountRef = useRef<number>(0)
 
   // Initialize graph data and simulation
+  const { layout } = useGraphState()
+
   useEffect(() => {
   if (!data || !svgRef.current) { 
       return
@@ -47,75 +50,82 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
       (l) => visibleEdges[l.kind as EdgeKind] && l.source && l.target
     )
 
-    // If user selected structured layout via window event, apply it
-    // Note: this is a lightweight approach; a future refactor can move layout state to context hook
-    const layoutListener = (e: any) => {
-      const kind = e?.detail
-      if (kind === 'structured') {
+    // Apply structured or force layout according to context `layout`.
+    if (layout === 'structured') {
+      try {
         applyStructuredLayout(filteredNodes as any, { width, height })
-      }
-      if (kind === 'force') {
-        // release fixed positions for force layout
-        filteredNodes.forEach((n) => {
-          n.fx = null
-          n.fy = null
-        })
+      } catch (e) {
+        // fallthrough
       }
     }
-
-    // Apply default structured layout if window initial setting exists
-    // (this allows toggling without context wiring)
-    // listen for events
-    window.addEventListener('layout.change', layoutListener)
-
-    // Apply Dagre layout for initial positioning
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const dagreLib: any = (window as any).dagre
-      if (dagreLib) {
-        const gDag = new dagreLib.graphlib.Graph({ compound: false })
-        gDag.setGraph({
-          rankdir: 'LR',
-          nodesep: 120,
-          ranksep: 180,
-          marginx: 60,
-          marginy: 60,
-        })
-        gDag.setDefaultEdgeLabel(() => ({}))
-
-        // Set dynamic node sizes for Dagre
-        filteredNodes.forEach((n) => {
-          const { width: nodeWidth, height: nodeHeight } = getNodeDimensions(n)
-          gDag.setNode(n.id, { width: nodeWidth, height: nodeHeight })
-        })
-
-        filteredLinks.forEach((l: any) =>
-          gDag.setEdge(l.source.id || l.src, l.target.id || l.dst)
-        )
-
-        dagreLib.layout(gDag)
-
-        // Apply positions with centering
-        const graphBounds = gDag.graph()
-        const offsetX = (width - graphBounds.width) / 2
-        const offsetY = (height - graphBounds.height) / 2
-
-        filteredNodes.forEach((n) => {
-          const dn = gDag.node(n.id)
-          if (dn) {
-            n.x = dn.x + offsetX
-            n.y = dn.y + offsetY
-            n.fx = n.x
-            n.fy = n.y
-          }
-        })
-      }
-    } catch (e) {
-      Logger.warn('dagre.layout.failed', { message: String(e) })
+    if (layout === 'force') {
+      // release fixed positions for force layout
+      filteredNodes.forEach((n) => {
+        n.fx = null
+        n.fy = null
+      })
     }
 
-  // Set up D3 force simulation (tuned for larger graphs)
-  const simulation = d3.forceSimulation(filteredNodes)
+  // Apply Dagre layout for initial positioning only when using structured layout
+  if (layout === 'structured') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const dagreLib: any = (window as any).dagre
+        if (dagreLib) {
+          const gDag = new dagreLib.graphlib.Graph({ compound: false })
+          gDag.setGraph({
+            rankdir: 'LR',
+            nodesep: 120,
+            ranksep: 180,
+            marginx: 60,
+            marginy: 60,
+          })
+          gDag.setDefaultEdgeLabel(() => ({}))
+
+          // Set dynamic node sizes for Dagre
+          filteredNodes.forEach((n) => {
+            const { width: nodeWidth, height: nodeHeight } = getNodeDimensions(n)
+            gDag.setNode(n.id, { width: nodeWidth, height: nodeHeight })
+          })
+
+          filteredLinks.forEach((l: any) =>
+            gDag.setEdge(l.source.id || l.src, l.target.id || l.dst)
+          )
+
+          dagreLib.layout(gDag)
+
+          // Apply positions with centering
+          const graphBounds = gDag.graph()
+          const offsetX = (width - graphBounds.width) / 2
+          const offsetY = (height - graphBounds.height) / 2
+
+          filteredNodes.forEach((n) => {
+            const dn = gDag.node(n.id)
+            if (dn) {
+              n.x = dn.x + offsetX
+              n.y = dn.y + offsetY
+              n.fx = n.x
+              n.fy = n.y
+            }
+          })
+        }
+      } catch (e) {
+        Logger.warn('dagre.layout.failed', { message: String(e) })
+      }
+      // For structured layout, do not start the force simulation. Leave nodes fixed at Dagre positions.
+      setNodes(filteredNodes)
+      setEdges(filteredLinks)
+      Logger.info('react-graph.init', {
+        nodeCount: filteredNodes.length,
+        edgeCount: filteredLinks.length,
+        layout: 'structured',
+      })
+      // No simulation to stop; return early from effect cleanup
+      return () => {}
+    }
+
+    // Set up D3 force simulation (tuned for larger graphs) for force layout
+    const simulation = d3.forceSimulation(filteredNodes)
       .force(
         'link',
         d3
@@ -136,8 +146,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
           // slightly lower strength so links don't overpower layout
           .strength(0.08)
       )
-  // Reduce charge magnitude so nodes don't push too far apart and create a less "bouncy" layout
-  .force('charge', d3.forceManyBody().strength(-80))
+      // Reduce charge magnitude so nodes don't push too far apart and create a less "bouncy" layout
+      .force('charge', d3.forceManyBody().strength(-80))
       // Smaller collision radius to allow tighter packing when needed
       .force('collision', d3.forceCollide().radius(60))
       // slower decay so layout stabilizes smoothly for larger graphs
@@ -189,13 +199,13 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     Logger.info('react-graph.init', {
       nodeCount: filteredNodes.length,
       edgeCount: filteredLinks.length,
+      layout: 'force',
     })
 
     return () => {
-  simulation.stop()
-  window.removeEventListener('layout.change', layoutListener)
+      simulation.stop()
     }
-  }, [data, dimensions, visibleNodes, visibleEdges])
+  }, [data, dimensions, visibleNodes, visibleEdges, layout])
 
   // Drag handlers (stop propagation so zoom/pan doesn't also react)
   const handleDragStart = (node: NodeData) => (event: any) => {
