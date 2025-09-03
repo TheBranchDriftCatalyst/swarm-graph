@@ -169,6 +169,80 @@
                     "image/png"
                 ],
                 "summary": "Rendered PNG",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by stack",
+                        "name": "stack",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Exclude nodes with zero degree (1/true)",
+                        "name": "exclude_orphans",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated kinds to include (container,image,network,volume)",
+                        "name": "kinds",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Layout direction (LR, RL, TB, BT)",
+                        "name": "dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name substring filter (case-insensitive)",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Minimum incident edges to include node",
+                        "name": "min_degree",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated kinds to exclude",
+                        "name": "exclude_kinds",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Append short IDs to labels (1/true)",
+                        "name": "show_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Truncate labels to this many runes (0 disables)",
+                        "name": "max_label_runes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group nodes by this attribute into subgraphs",
+                        "name": "group_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Theme name (synthwave/cyberpunk/neon)",
+                        "name": "theme",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Include legend in output (1/true)",
+                        "name": "include_legend",
+                        "in": "query"
+                    }
+                ],
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -194,14 +268,68 @@
                     },
                     {
                         "type": "string",
-                        "description": "Comma-separated kinds",
+                        "description": "Exclude nodes with zero degree (1/true)",
+                        "name": "exclude_orphans",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated kinds to include (container,image,network,volume)",
                         "name": "kinds",
                         "in": "query"
                     },
                     {
                         "type": "string",
-                        "description": "Layout direction",
+                        "description": "Layout direction (LR, RL, TB, BT)",
                         "name": "dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name substring filter (case-insensitive)",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Minimum incident edges to include node",
+                        "name": "min_degree",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Comma-separated kinds to exclude",
+                        "name": "exclude_kinds",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Append short IDs to labels (1/true)",
+                        "name": "show_ids",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Truncate labels to this many runes (0 disables)",
+                        "name": "max_label_runes",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Group nodes by this attribute into subgraphs",
+                        "name": "group_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Theme name (synthwave/cyberpunk/neon)",
+                        "name": "theme",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Include legend in output (1/true)",
+                        "name": "include_legend",
                         "in": "query"
                     }
                 ],

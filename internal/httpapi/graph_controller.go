@@ -1,12 +1,16 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"swarm-graph/internal/mermaid"
 	"swarm-graph/internal/store"
@@ -149,8 +153,17 @@ func (gc *GraphController) JSONHandler(w http.ResponseWriter, r *http.Request) {
 // @Summary Rendered SVG
 // @Produce image/svg+xml
 // @Param stack query string false "Filter by stack"
-// @Param kinds query string false "Comma-separated kinds"
-// @Param dir query string false "Layout direction"
+// @Param exclude_orphans query string false "Exclude nodes with zero degree (1/true)"
+// @Param kinds query string false "Comma-separated kinds to include (container,image,network,volume)"
+// @Param dir query string false "Layout direction (LR, RL, TB, BT)"
+// @Param name query string false "Name substring filter (case-insensitive)"
+// @Param min_degree query int false "Minimum incident edges to include node"
+// @Param exclude_kinds query string false "Comma-separated kinds to exclude"
+// @Param show_ids query string false "Append short IDs to labels (1/true)"
+// @Param max_label_runes query int false "Truncate labels to this many runes (0 disables)"
+// @Param group_by query string false "Group nodes by this attribute into subgraphs"
+// @Param theme query string false "Theme name (synthwave/cyberpunk/neon)"
+// @Param include_legend query string false "Include legend in output (1/true)"
 // @Success 200 {file} file
 // @Router /graph.svg [get]
 func (gc *GraphController) SVGHandler(w http.ResponseWriter, r *http.Request) {
@@ -160,8 +173,135 @@ func (gc *GraphController) SVGHandler(w http.ResponseWriter, r *http.Request) {
 // PNGHandler returns rendered PNG via Kroki
 // @Summary Rendered PNG
 // @Produce image/png
+// @Param stack query string false "Filter by stack"
+// @Param exclude_orphans query string false "Exclude nodes with zero degree (1/true)"
+// @Param kinds query string false "Comma-separated kinds to include (container,image,network,volume)"
+// @Param dir query string false "Layout direction (LR, RL, TB, BT)"
+// @Param name query string false "Name substring filter (case-insensitive)"
+// @Param min_degree query int false "Minimum incident edges to include node"
+// @Param exclude_kinds query string false "Comma-separated kinds to exclude"
+// @Param show_ids query string false "Append short IDs to labels (1/true)"
+// @Param max_label_runes query int false "Truncate labels to this many runes (0 disables)"
+// @Param group_by query string false "Group nodes by this attribute into subgraphs"
+// @Param theme query string false "Theme name (synthwave/cyberpunk/neon)"
+// @Param include_legend query string false "Include legend in output (1/true)"
 // @Success 200 {file} file
 // @Router /graph.png [get]
 func (gc *GraphController) PNGHandler(w http.ResponseWriter, r *http.Request) {
 	serveRendered(w, r, gc.store, gc.options, gc.logger, "png", "image/png")
+}
+
+func serveRendered(w http.ResponseWriter, r *http.Request, st *store.MemoryStore, opts Options, log *slog.Logger, format, ctype string) {
+	ctx := r.Context()
+
+	// Snapshot and apply filters from query params
+	g := st.Snapshot()
+	mopts := mermaid.DefaultOptions()
+	q := r.URL.Query()
+	if s := strings.TrimSpace(q.Get("stack")); s != "" {
+		mopts.FilterStack = s
+	}
+	if q.Get("exclude_orphans") == "1" || strings.ToLower(q.Get("exclude_orphans")) == "true" {
+		mopts.ExcludeOrphans = true
+	}
+	if kinds := strings.TrimSpace(q.Get("kinds")); kinds != "" {
+		for _, k := range strings.Split(kinds, ",") {
+			kk := strings.TrimSpace(k)
+			switch kk {
+			case "container":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeContainer)
+			case "image":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeImage)
+			case "network":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeNetwork)
+			case "volume":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeVolume)
+			}
+		}
+	}
+
+	txt, err := mermaid.RenderToString(g, mopts, nil, nil, log)
+	if err != nil {
+		httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
+		return
+	}
+
+	etag := etagFor(txt + "|" + format)
+	if checkIfNoneMatch(w, r, etag) {
+		return
+	}
+
+	img, err := krokiRender(ctx, txt, format, opts)
+	if err != nil {
+		// Fallback: return HTML viewer if Kroki fails (keeps things usable offline)
+		log.Warn("kroki render failed; falling back to html", "err", err.Error())
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_ = tmplFallbackHTML.Execute(w, struct {
+			Error   string
+			Diagram string
+		}{Error: err.Error(), Diagram: txt})
+		return
+	}
+
+	setCommonHeaders(w, ctype, etag, opts.CacheMaxAge)
+	_, _ = w.Write(img)
+}
+
+func krokiRender(ctx context.Context, mermaidSrc, format string, opts Options) ([]byte, error) {
+	// Determine Kroki base URL: prefer opts, then env, then Docker Compose service default.
+	baseURL := strings.TrimSpace(opts.KrokiURL)
+	if baseURL == "" {
+		// envOr is defined elsewhere in this file and will pick up envrc/.env vars.
+		baseURL = envOr("KROKI_URL", "http://kroki:8000")
+	}
+	// Ensure a scheme is present (Docker Compose service names are typically used with http).
+	if !strings.HasPrefix(baseURL, "http://") && !strings.HasPrefix(baseURL, "https://") {
+		baseURL = "http://" + baseURL
+	}
+
+	// POST raw source per Kroki spec: POST {KROKI}/mermaid/{format}
+	// Body is plain text of the diagram.
+	url := strings.TrimRight(baseURL, "/") + "/mermaid/" + format
+
+	// Short, sane timeout per request
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(mermaidSrc))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "text/plain; charset=utf-8")
+	req.Header.Set("Accept", "*/*")
+
+	client := &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   3 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			MaxIdleConns:          100,
+			MaxConnsPerHost:       0,
+			IdleConnTimeout:       90 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		},
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return nil, fmt.Errorf("kroki status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	return io.ReadAll(resp.Body)
 }

@@ -110,6 +110,55 @@ paths:
       summary: Mermaid source
   /graph.png:
     get:
+      parameters:
+      - description: Filter by stack
+        in: query
+        name: stack
+        type: string
+      - description: Exclude nodes with zero degree (1/true)
+        in: query
+        name: exclude_orphans
+        type: string
+      - description: Comma-separated kinds to include (container,image,network,volume)
+        in: query
+        name: kinds
+        type: string
+      - description: Layout direction (LR, RL, TB, BT)
+        in: query
+        name: dir
+        type: string
+      - description: Name substring filter (case-insensitive)
+        in: query
+        name: name
+        type: string
+      - description: Minimum incident edges to include node
+        in: query
+        name: min_degree
+        type: integer
+      - description: Comma-separated kinds to exclude
+        in: query
+        name: exclude_kinds
+        type: string
+      - description: Append short IDs to labels (1/true)
+        in: query
+        name: show_ids
+        type: string
+      - description: Truncate labels to this many runes (0 disables)
+        in: query
+        name: max_label_runes
+        type: integer
+      - description: Group nodes by this attribute into subgraphs
+        in: query
+        name: group_by
+        type: string
+      - description: Theme name (synthwave/cyberpunk/neon)
+        in: query
+        name: theme
+        type: string
+      - description: Include legend in output (1/true)
+        in: query
+        name: include_legend
+        type: string
       produces:
       - image/png
       responses:
@@ -125,13 +174,49 @@ paths:
         in: query
         name: stack
         type: string
-      - description: Comma-separated kinds
+      - description: Exclude nodes with zero degree (1/true)
+        in: query
+        name: exclude_orphans
+        type: string
+      - description: Comma-separated kinds to include (container,image,network,volume)
         in: query
         name: kinds
         type: string
-      - description: Layout direction
+      - description: Layout direction (LR, RL, TB, BT)
         in: query
         name: dir
+        type: string
+      - description: Name substring filter (case-insensitive)
+        in: query
+        name: name
+        type: string
+      - description: Minimum incident edges to include node
+        in: query
+        name: min_degree
+        type: integer
+      - description: Comma-separated kinds to exclude
+        in: query
+        name: exclude_kinds
+        type: string
+      - description: Append short IDs to labels (1/true)
+        in: query
+        name: show_ids
+        type: string
+      - description: Truncate labels to this many runes (0 disables)
+        in: query
+        name: max_label_runes
+        type: integer
+      - description: Group nodes by this attribute into subgraphs
+        in: query
+        name: group_by
+        type: string
+      - description: Theme name (synthwave/cyberpunk/neon)
+        in: query
+        name: theme
+        type: string
+      - description: Include legend in output (1/true)
+        in: query
+        name: include_legend
         type: string
       produces:
       - image/svg+xml
