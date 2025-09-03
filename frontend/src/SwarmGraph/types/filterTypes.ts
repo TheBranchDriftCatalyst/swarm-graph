@@ -21,6 +21,8 @@ export interface GraphFilters {
   showRunningOnly: boolean
   showInUseOnly: boolean
   hideSystemResources: boolean
+  // Explicitly excluded nodes (by id)
+  excludedNodeIds?: string[]
 }
 
 // Filter panel props

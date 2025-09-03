@@ -562,7 +562,7 @@ func RenderToString(g InfraGraph, opts RenderOptions, nf NodeFormatter, ef EdgeF
 // DefaultOptions returns sensible default options for rendering.
 func DefaultOptions() RenderOptions {
 	return RenderOptions{
-		Direction:     "LR",
+		Direction:     "TD",
 		ShowNodeIDs:   false,
 		MaxLabelRunes: 48,
 		IncludeLegend: false,

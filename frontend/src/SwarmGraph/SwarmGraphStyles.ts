@@ -42,6 +42,7 @@ export const styles: {
   filterButton: CSSProperties
   filterPresetButton: CSSProperties
   filterSummary: CSSProperties
+  smallButton: CSSProperties
 } = {
   container: {
     width: '100%',
@@ -214,6 +215,15 @@ export const styles: {
     fontFamily: 'inherit',
     transition: 'all 0.2s ease',
     outline: 'none',
+  },
+  smallButton: {
+    padding: '6px 8px',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.04)',
+    borderRadius: '6px',
+    color: '#FFFFFF',
+    cursor: 'pointer',
+    fontSize: '12px',
   },
   filterPresetButton: {
     padding: '8px 12px',

@@ -98,6 +98,10 @@ export const useGraphFilters = () => {
 
     // Filter nodes
     let filteredNodes = nodeArray.filter(node => {
+      // Excluded nodes filter
+      if (filters.excludedNodeIds && filters.excludedNodeIds.includes(node.id)) {
+        return false
+      }
       // Basic visibility filter
       if (!filters.visibleNodes[node.kind]) {
         return false
@@ -234,6 +238,23 @@ export const useGraphFilters = () => {
     dispatch({ type: 'RESET_FILTERS' })
   }
 
+  // Exclusion helpers
+  const excludeNode = (nodeId: string) => {
+    const existing = state.filters.excludedNodeIds || []
+    if (!existing.includes(nodeId)) {
+      updateFilters({ excludedNodeIds: [...existing, nodeId] })
+    }
+  }
+
+  const includeNode = (nodeId: string) => {
+    const existing = state.filters.excludedNodeIds || []
+    updateFilters({ excludedNodeIds: existing.filter(id => id !== nodeId) })
+  }
+
+  const clearExcluded = () => {
+    updateFilters({ excludedNodeIds: [] })
+  }
+
   // Quick filter presets
   const showOnlyOrphaned = () => {
     updateFilters({
@@ -282,6 +303,10 @@ export const useGraphFilters = () => {
     toggleRunningOnly,
     toggleInUseOnly,
     toggleSystemResources,
+  // Exclusion helpers
+  excludeNode,
+  includeNode,
+  clearExcluded,
     
     // Quick presets
     showOnlyOrphaned,

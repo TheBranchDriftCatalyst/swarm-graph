@@ -278,7 +278,11 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   }
 
   const handleNodeClick = (nodeId: string) => () => {
-    setSelectedNode(nodeId)
+    if (selectedNode === nodeId) {
+      setSelectedNode(null)
+    } else {
+      setSelectedNode(nodeId)
+    }
   }
 
   return (
@@ -356,11 +360,13 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
         width={dimensions.width}
         height={dimensions.height}
         fill="url(#bg-gradient)"
+  onClick={() => setSelectedNode(null)}
       />
       <rect
         width={dimensions.width}
         height={dimensions.height}
         fill="url(#grid)"
+  onClick={() => setSelectedNode(null)}
       />
 
       {/* Zoomable layer (pan/zoom applied here) */}

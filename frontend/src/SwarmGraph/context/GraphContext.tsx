@@ -48,6 +48,7 @@ const defaultFilters: GraphFilters = {
   showRunningOnly: false,
   showInUseOnly: false,
   hideSystemResources: false,
+  excludedNodeIds: [],
 }
 
 const initialState: GraphState = {

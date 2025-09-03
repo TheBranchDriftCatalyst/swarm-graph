@@ -30,7 +30,7 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
     getNodeInfo,
   } = useGraphState()
 
-  const { filters, toggleNodeVisibility, toggleEdgeVisibility } = useGraphFilters()
+  const { filters, toggleNodeVisibility, toggleEdgeVisibility, excludeNode } = useGraphFilters()
   const [filterPanelVisible, setFilterPanelVisible] = useState(false)
 
   // Update raw data when props change
@@ -103,6 +103,26 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
       setSelectedNode(value)
     }
   }
+
+  // Keyboard handling: Delete/Backspace to exclude selected node, Escape to clear selection
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!selectedNode) {
+        return
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // exclude currently selected node
+        excludeNode(selectedNode)
+        setSelectedNode(null)
+      }
+      if (e.key === 'Escape') {
+        setSelectedNode(null)
+      }
+    }
+
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [selectedNode, excludeNode, setSelectedNode])
 
   return (
     <div style={styles.container}>

@@ -134,7 +134,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
       style={{ cursor: 'pointer', opacity: isDimmed ? 0.35 : 1, filter: isSelected || isHovered ? 'url(#node-glow)' : undefined }}
   onMouseEnter={onMouseEnter}
   onMouseLeave={onMouseLeave}
-  onClick={onClick}
+  onClick={(e) => { try { e.stopPropagation() } catch (err) {} ; if (onClick) onClick() }}
   onDoubleClick={onDoubleClick}
       onMouseDown={(e) => {
         try {

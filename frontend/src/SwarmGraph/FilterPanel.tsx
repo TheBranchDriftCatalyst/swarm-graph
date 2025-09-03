@@ -1,5 +1,6 @@
 import React from 'react'
 import { useGraphFilters } from './hooks/useGraphFilters'
+import { useGraphState } from './hooks/useGraphState'
 import { styles, colors } from './SwarmGraphStyles'
 import { 
   FilterPanelProps,
@@ -27,7 +28,12 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ isVisible, onToggle }) => {
     showOnlyOrphaned,
     showOnlyRunning,
     showMinimalView,
+    excludeNode,
+    includeNode,
+    clearExcluded,
   } = useGraphFilters()
+
+  const { getNodeInfo } = useGraphState()
 
   // Dynamic styles based on visibility
   const panelStyle = {
@@ -345,6 +351,42 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ isVisible, onToggle }) => {
             </label>
           </div>
 
+          {/* Excluded Nodes */}
+          <div style={styles.filterSection}>
+            <div style={styles.filterSectionTitle}>Excluded Nodes</div>
+            {filters.excludedNodeIds && filters.excludedNodeIds.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {filters.excludedNodeIds.map((id) => {
+                  const info = getNodeInfo(id)
+                  const label = info ? (info.name || info.Name || info.id) : id
+                  return (
+                    <div key={id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ color: '#FFF', opacity: 0.9 }}>{label}</div>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          style={styles.smallButton}
+                          onClick={() => includeNode(id)}
+                          title="Include back"
+                        >
+                          ➕
+                        </button>
+                        <button
+                          style={styles.smallButton}
+                          onClick={() => includeNode(id)}
+                          title="Remove from excluded list"
+                        >
+                          ✖️
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+                <button style={styles.filterButton} onClick={clearExcluded}>Clear Excluded</button>
+              </div>
+            ) : (
+              <div style={{ color: '#9AA0B4' }}>No excluded nodes</div>
+            )}
+          </div>
           {/* Filter Summary */}
           <div style={styles.filterSummary}>
             <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#00D4FF' }}>
