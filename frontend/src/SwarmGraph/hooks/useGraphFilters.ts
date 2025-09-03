@@ -191,7 +191,7 @@ export const useGraphFilters = () => {
     if (applyFilters) {
       dispatch({ type: 'SET_FILTERED_DATA', payload: applyFilters })
     }
-  }, [applyFilters, dispatch])
+  }, [applyFilters])
 
   // Filter actions
   const updateFilters = (newFilters: Partial<GraphFilters>) => {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useCallback } from 'react'
 import { useGraphContext } from '../context/GraphContext'
 import { GraphData } from '../interfaces'
 
@@ -6,33 +6,33 @@ export const useGraphState = () => {
   const { state, dispatch } = useGraphContext()
 
   // Set raw data
-  const setRawData = (data: GraphData) => {
+  const setRawData = useCallback((data: GraphData) => {
     dispatch({ type: 'SET_RAW_DATA', payload: data })
-  }
+  }, [dispatch])
 
   // Node selection handlers
-  const setHoveredNode = (nodeId: string | null) => {
+  const setHoveredNode = useCallback((nodeId: string | null) => {
     dispatch({ type: 'SET_HOVERED_NODE', payload: nodeId })
-  }
+  }, [dispatch])
 
-  const setSelectedNode = (nodeId: string | null) => {
+  const setSelectedNode = useCallback((nodeId: string | null) => {
     dispatch({ type: 'SET_SELECTED_NODE', payload: nodeId })
-  }
+  }, [dispatch])
 
   // Dimensions handler
-  const setDimensions = (dimensions: { width: number; height: number }) => {
+  const setDimensions = useCallback((dimensions: { width: number; height: number }) => {
     dispatch({ type: 'SET_DIMENSIONS', payload: dimensions })
-  }
+  }, [dispatch])
 
   // Layout handler
-  const setLayout = (layout: 'force' | 'structured') => {
+  const setLayout = useCallback((layout: 'force' | 'structured') => {
     dispatch({ type: 'SET_LAYOUT', payload: layout })
-  }
+  }, [dispatch])
 
   // Orthogonal edges toggle
-  const toggleOrthogonalEdges = () => {
+  const toggleOrthogonalEdges = useCallback(() => {
     dispatch({ type: 'TOGGLE_ORTHOGONAL_EDGES' })
-  }
+  }, [dispatch])
 
   // Window resize handler
   useEffect(() => {
@@ -45,10 +45,10 @@ export const useGraphState = () => {
 
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [setDimensions])
 
   // Lookup function for node info
-  const getNodeInfo = (nodeId: string | null) => {
+  const getNodeInfo = useCallback((nodeId: string | null) => {
     if (!nodeId || !state.filteredData?.nodes) {
       return undefined
     }
@@ -64,7 +64,7 @@ export const useGraphState = () => {
         (v) => String(v) === String(nodeId)
       )
     )
-  }
+  }, [state.filteredData])
 
   return {
     // State
