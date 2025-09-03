@@ -417,8 +417,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
             <ReactD3Edge
               key={`${edge.src}-${edge.dst}-${index}`}
               data={edge}
-              zoom={zoomScale}
               orthogonal={orthogonalEdges}
+              allNodes={nodes}
               isDimmed={
                 Boolean(
                   hoveredNode &&
@@ -440,7 +440,6 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
               data={node}
               isSelected={selectedNode === node.id}
               isHovered={hoveredNode === node.id}
-              zoom={zoomScale}
               isDimmed={Boolean(hoveredNode && hoveredNode !== node.id && selectedNode !== node.id)}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave(node.id)}

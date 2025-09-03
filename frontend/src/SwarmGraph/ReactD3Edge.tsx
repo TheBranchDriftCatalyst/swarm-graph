@@ -6,8 +6,8 @@ import { getNodeDimensions } from './ReactD3Node'
 
 interface ReactD3EdgeProps {
   data: EdgeData
-  zoom?: number
   orthogonal?: boolean
+  allNodes?: any[]
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -21,8 +21,7 @@ const calculateEdgeEndpoints = (
   targetX: number, 
   targetY: number,
   sourceNode: any,
-  targetNode: any,
-  zoom: number = 1
+  targetNode: any
 ) => {
   // Calculate the direction vector
   const dx = targetX - sourceX
@@ -42,16 +41,14 @@ const calculateEdgeEndpoints = (
   const unitX = dx / distance
   const unitY = dy / distance
   
-  // Get actual node dimensions
+  // Get actual node dimensions (no zoom scaling)
   const sourceDimensions = getNodeDimensions(sourceNode)
   const targetDimensions = getNodeDimensions(targetNode)
   
-  // Apply the same visual scaling as nodes do (inverse of zoom, clamped)
-  const visualScale = Math.max(0.5, Math.min(1.2, 1 / zoom))
-  const sourceWidth = sourceDimensions.width * visualScale
-  const sourceHeight = sourceDimensions.height * visualScale
-  const targetWidth = targetDimensions.width * visualScale
-  const targetHeight = targetDimensions.height * visualScale
+  const sourceWidth = sourceDimensions.width
+  const sourceHeight = sourceDimensions.height
+  const targetWidth = targetDimensions.width
+  const targetHeight = targetDimensions.height
   
   // Function to find intersection with rectangular boundary
   const findRectIntersection = (centerX: number, centerY: number, width: number, height: number, dirX: number, dirY: number) => {
@@ -131,35 +128,138 @@ const calculateEdgeEndpoints = (
   }
 }
 
-// Function to calculate orthogonal (right-angled) edge path
+// Function to calculate orthogonal (right-angled) edge path with collision avoidance
 const calculateOrthogonalPath = (
   x1: number,
   y1: number,
   x2: number,
-  y2: number
+  y2: number,
+  sourceNode: any,
+  targetNode: any,
+  allNodes: any[] = []
 ) => {
-  // Calculate midpoint for the bend
   const dx = x2 - x1
   const dy = y2 - y1
   
-  // Choose whether to go horizontal-first or vertical-first based on which is longer
-  const goHorizontalFirst = Math.abs(dx) > Math.abs(dy)
-  
-  if (goHorizontalFirst) {
-    // Go horizontal first, then vertical
-    const midX = x1 + dx * 0.7 // 70% of the way horizontal
-    return `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
-  } else {
-    // Go vertical first, then horizontal
-    const midY = y1 + dy * 0.7 // 70% of the way vertical
-    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`
+  // Helper function to check if a point is inside a node's bounds
+  const isPointInNode = (px: number, py: number, node: any) => {
+    if (!node || node.id === sourceNode.id || node.id === targetNode.id) {
+      return false
+    }
+
+    
+    const nodeDims = getNodeDimensions(node)
+    const { width, height } = nodeDims
+    
+    const nodeX = node.x || 0
+    const nodeY = node.y || 0
+    
+    return (
+      px >= nodeX - width/2 - 10 && // 10px padding
+      px <= nodeX + width/2 + 10 &&
+      py >= nodeY - height/2 - 10 &&
+      py <= nodeY + height/2 + 10
+    )
   }
+  
+  // Helper function to check if a line segment intersects any nodes
+  const lineIntersectsNodes = (sx: number, sy: number, ex: number, ey: number) => {
+    const steps = 20 // Check 20 points along the line
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps
+      const px = sx + (ex - sx) * t
+      const py = sy + (ey - sy) * t
+      
+      for (const node of allNodes) {
+        if (isPointInNode(px, py, node)) {
+          return true
+        }
+      }
+    }
+    return false
+  }
+  
+  // Calculate different routing options
+  const routes = []
+  
+  // Option 1: Horizontal-first direct
+  const hMidX = x1 + dx * 0.7
+  if (!lineIntersectsNodes(x1, y1, hMidX, y1) && 
+      !lineIntersectsNodes(hMidX, y1, hMidX, y2) && 
+      !lineIntersectsNodes(hMidX, y2, x2, y2)) {
+    routes.push({
+      path: `M ${x1} ${y1} L ${hMidX} ${y1} L ${hMidX} ${y2} L ${x2} ${y2}`,
+      priority: Math.abs(dx) > Math.abs(dy) ? 1 : 2
+    })
+  }
+  
+  // Option 2: Vertical-first direct
+  const vMidY = y1 + dy * 0.7
+  if (!lineIntersectsNodes(x1, y1, x1, vMidY) && 
+      !lineIntersectsNodes(x1, vMidY, x2, vMidY) && 
+      !lineIntersectsNodes(x2, vMidY, x2, y2)) {
+    routes.push({
+      path: `M ${x1} ${y1} L ${x1} ${vMidY} L ${x2} ${vMidY} L ${x2} ${y2}`,
+      priority: Math.abs(dy) > Math.abs(dx) ? 1 : 2
+    })
+  }
+  
+  // Option 3: Two-bend horizontal route (go around obstacles)
+  const hMidX2 = x1 + dx * 0.5
+  const offsetY = dy > 0 ? Math.max(80, Math.abs(dy) * 0.3) : -Math.max(80, Math.abs(dy) * 0.3)
+  const routeY = y1 + offsetY
+  
+  if (!lineIntersectsNodes(x1, y1, hMidX2, y1) && 
+      !lineIntersectsNodes(hMidX2, y1, hMidX2, routeY) && 
+      !lineIntersectsNodes(hMidX2, routeY, x2, routeY) && 
+      !lineIntersectsNodes(x2, routeY, x2, y2)) {
+    routes.push({
+      path: `M ${x1} ${y1} L ${hMidX2} ${y1} L ${hMidX2} ${routeY} L ${x2} ${routeY} L ${x2} ${y2}`,
+      priority: 3
+    })
+  }
+  
+  // Option 4: Two-bend vertical route
+  const vMidY2 = y1 + dy * 0.5
+  const offsetX = dx > 0 ? Math.max(80, Math.abs(dx) * 0.3) : -Math.max(80, Math.abs(dx) * 0.3)
+  const routeX = x1 + offsetX
+  
+  if (!lineIntersectsNodes(x1, y1, x1, vMidY2) && 
+      !lineIntersectsNodes(x1, vMidY2, routeX, vMidY2) && 
+      !lineIntersectsNodes(routeX, vMidY2, routeX, y2) && 
+      !lineIntersectsNodes(routeX, y2, x2, y2)) {
+    routes.push({
+      path: `M ${x1} ${y1} L ${x1} ${vMidY2} L ${routeX} ${vMidY2} L ${routeX} ${y2} L ${x2} ${y2}`,
+      priority: 3
+    })
+  }
+  
+  // Option 5: Fallback - wide detour routes
+  const wideOffsetY = dy > 0 ? 120 : -120
+  const wideOffsetX = dx > 0 ? 120 : -120
+  
+  // Wide horizontal detour
+  routes.push({
+    path: `M ${x1} ${y1} L ${x1} ${y1 + wideOffsetY} L ${x2} ${y1 + wideOffsetY} L ${x2} ${y2}`,
+    priority: 4
+  })
+  
+  // Wide vertical detour
+  routes.push({
+    path: `M ${x1} ${y1} L ${x1 + wideOffsetX} ${y1} L ${x1 + wideOffsetX} ${y2} L ${x2} ${y2}`,
+    priority: 4
+  })
+  
+  // Sort routes by priority and return the best one
+  routes.sort((a, b) => a.priority - b.priority)
+  
+  return routes.length > 0 ? routes[0].path : `M ${x1} ${y1} L ${x2} ${y2}` // Fallback to straight line
 }
 
 const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   data,
-  zoom = 1,
   orthogonal = false,
+  allNodes = [],
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -244,13 +344,20 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
     data.target.x || 0,
     data.target.y || 0,
     data.source,
-    data.target,
-    zoom
+    data.target
   )
 
   // Generate path based on mode
   const edgePath = orthogonal 
-    ? calculateOrthogonalPath(edgePoints.x1, edgePoints.y1, edgePoints.x2, edgePoints.y2)
+    ? calculateOrthogonalPath(
+        edgePoints.x1, 
+        edgePoints.y1, 
+        edgePoints.x2, 
+        edgePoints.y2,
+        data.source,
+        data.target,
+        allNodes
+      )
     : null
 
   // Calculate midpoint for label positioning (use original centers for label)

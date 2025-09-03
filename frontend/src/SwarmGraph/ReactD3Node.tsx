@@ -76,7 +76,8 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
 }) => {
   const groupRef = useRef<SVGGElement>(null)
   const { width, height } = getNodeDimensions(data)
-  const effectiveZoom = typeof zoom === 'number' ? zoom : 1
+  // const effectiveZoom = typeof zoom === 'number' ? zoom : 1
+  const effectiveZoom = 1
 
   // Constants
   const pad = 12
@@ -122,20 +123,28 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
         ? '#FF6B6B'
         : '#FFA500'
 
-  // Make node visual size responsive to zoom; we clamp scale to keep labels readable
-  const visualScale = Math.max(0.5, Math.min(1.2, 1 / effectiveZoom))
-  const visualWidth = width * visualScale
-  const visualHeight = height * visualScale
+  // Use node dimensions without zoom scaling
+  const visualWidth = width
+  const visualHeight = height
 
   return (
     <g
       ref={groupRef}
-      transform={`translate(${data.x || 0}, ${data.y || 0}) scale(${visualScale})`}
-      style={{ cursor: 'pointer', opacity: isDimmed ? 0.35 : 1, filter: isSelected || isHovered ? 'url(#node-glow)' : undefined }}
-  onMouseEnter={onMouseEnter}
-  onMouseLeave={onMouseLeave}
-  onClick={(e) => { try { e.stopPropagation() } catch (err) {} ; if (onClick) onClick() }}
-  onDoubleClick={onDoubleClick}
+      transform={`translate(${data.x || 0}, ${data.y || 0})`}
+      style={{
+        cursor: 'pointer',
+        opacity: isDimmed ? 0.35 : 1,
+        filter: isSelected || isHovered ? 'url(#node-glow)' : undefined,
+      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={(e) => {
+        try {
+          e.stopPropagation()
+        } catch (err) {}
+        if (onClick) onClick()
+      }}
+      onDoubleClick={onDoubleClick}
       onMouseDown={(e) => {
         try {
           e.stopPropagation()
@@ -161,8 +170,15 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
         className="node-card"
       />
 
-  {/* Icon or Logo (delegated to NodeType component for easier extraction) */}
-  <TypeComponent data={data} width={visualWidth} height={visualHeight} pad={pad} imgSize={Math.round(imgSize * visualScale)} showLogo={showLogo} />
+      {/* Icon or Logo (delegated to NodeType component for easier extraction) */}
+      <TypeComponent
+        data={data}
+        width={visualWidth}
+        height={visualHeight}
+        pad={pad}
+        imgSize={imgSize}
+        showLogo={showLogo}
+      />
 
       {/* Name */}
       <text
