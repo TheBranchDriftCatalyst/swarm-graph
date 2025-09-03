@@ -1,0 +1,237 @@
+import React, { useEffect, useRef } from 'react'
+import * as d3 from 'd3'
+import { colors, nodeIcons } from './SwarmGraphStyles'
+import { NodeData } from './interfaces'
+import { NodeKind } from '../types'
+
+interface ReactD3NodeProps {
+  data: NodeData
+  isSelected?: boolean
+  isHovered?: boolean
+  onMouseEnter?: () => void
+  onMouseLeave?: () => void
+  onClick?: () => void
+  onDragStart?: (event: any) => void
+  onDrag?: (event: any) => void
+  onDragEnd?: (event: any) => void
+}
+
+// Function to calculate dynamic node dimensions
+const getNodeDimensions = (d: NodeData) => {
+  const name = d.name || d.Name || d.id || ''
+  const status = (d.attributes && d.attributes.status) || ''
+
+  // Base dimensions
+  const minWidth = 160
+  const minHeight = 60
+  const maxWidth = 280
+  const maxHeight = 80
+
+  // Calculate width based on content length
+  const nameLength = name.length
+  const hasStatus = status.length > 0
+  const hasAttributes = d.attributes && Object.keys(d.attributes).length > 1
+
+  // Dynamic width calculation
+  let width = Math.max(minWidth, Math.min(maxWidth, nameLength * 8 + 100))
+
+  // Dynamic height calculation
+  let height = minHeight
+  if (hasStatus) {
+    height += 0
+  }
+  if (hasAttributes) {
+    height += 10
+  }
+
+  height = Math.min(maxHeight, height)
+
+  return { width, height }
+}
+
+const ReactD3Node: React.FC<ReactD3NodeProps> = ({
+  data,
+  isSelected = false,
+  isHovered = false,
+  onMouseEnter,
+  onMouseLeave,
+  onClick,
+  onDragStart,
+  onDrag,
+  onDragEnd,
+}) => {
+  const groupRef = useRef<SVGGElement>(null)
+  const { width, height } = getNodeDimensions(data)
+
+  // Constants
+  const pad = 12
+  const imgSize = 32
+
+  // Vendor logos mapping
+  const vendorLogos: Record<string, string> = {
+    nginx:
+      'https://raw.githubusercontent.com/devicons/devicon/master/icons/nginx/nginx-original.svg',
+    redis:
+      'https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original.svg',
+    postgres:
+      'https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original.svg',
+  }
+
+  // Determine logo URL
+  const imageRef = (data.attributes && data.attributes.image) || ''
+  let logoUrl: string | undefined
+  if (imageRef) {
+    const parts = String(imageRef).split('/')
+    const last = parts[parts.length - 1].split(':')[0]
+    if (vendorLogos[last]) {
+      logoUrl = vendorLogos[last]
+    }
+  }
+
+  // Setup drag behavior
+  useEffect(() => {
+    if (!groupRef.current || !onDragStart || !onDrag || !onDragEnd) {
+      return
+    }
+
+    const drag = d3
+      .drag<SVGGElement, any>()
+      .on('start', onDragStart)
+      .on('drag', onDrag)
+      .on('end', onDragEnd)
+
+    d3.select(groupRef.current).call(drag as any)
+  }, [onDragStart, onDrag, onDragEnd])
+
+  // Calculate content
+  const name = data.name || data.Name || data.id || ''
+  const status = (data.attributes && data.attributes.status) || ''
+  const maxLength = Math.floor((width - imgSize - 40) / 7)
+  const displayName =
+    name.length > maxLength ? name.substring(0, maxLength) + '...' : name
+
+  // Status styling
+  const statusColor =
+    status === 'running'
+      ? '#00FF66'
+      : status === 'stopped'
+        ? '#FF3B30'
+        : '#FFA500'
+  const statusText =
+    status === 'running'
+      ? '#7CFC00'
+      : status === 'stopped'
+        ? '#FF6B6B'
+        : '#FFA500'
+
+  return (
+    <g
+      ref={groupRef}
+      transform={`translate(${data.x || 0}, ${data.y || 0})`}
+      style={{ cursor: 'pointer' }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={onClick}
+      onMouseDown={(e) => {
+        try {
+          e.stopPropagation()
+        } catch (err) {}
+      }}
+      onTouchStart={(e) => {
+        try {
+          e.stopPropagation()
+        } catch (err) {}
+      }}
+    >
+      {/* Card background */}
+      <rect
+        x={-width / 2}
+        y={-height / 2}
+        rx={8}
+        ry={8}
+        width={width}
+        height={height}
+        fill={`url(#gradient-${data.kind})`}
+        stroke={colors[data.kind] || '#888'}
+        strokeWidth={isHovered ? 3 : 2}
+        className="node-card"
+      />
+
+      {/* Icon or Logo */}
+      {logoUrl ? (
+        <image
+          href={logoUrl}
+          x={-width / 2 + pad}
+          y={-imgSize / 2}
+          width={imgSize}
+          height={imgSize}
+          preserveAspectRatio="xMidYMid meet"
+        />
+      ) : (
+        <text
+          x={-width / 2 + pad + imgSize / 2}
+          y={8}
+          textAnchor="middle"
+          fontSize={18}
+          fill={colors[data.kind]}
+        >
+          {nodeIcons[data.kind as NodeKind]}
+        </text>
+      )}
+
+      {/* Name */}
+      <text
+        x={-width / 2 + pad + imgSize + 12}
+        y={-8}
+        textAnchor="start"
+        fontSize={13}
+        fill="#FFFFFF"
+        fontWeight="600"
+      >
+        {displayName}
+      </text>
+
+      {/* Status */}
+      {status && (
+        <text
+          x={-width / 2 + pad + imgSize + 12}
+          y={10}
+          textAnchor="start"
+          fontSize={10}
+          fill={statusText}
+          fontWeight="500"
+        >
+          {status.toUpperCase()}
+        </text>
+      )}
+
+      {/* Status indicator */}
+      {status && (
+        <circle
+          cx={width / 2 - pad - 8}
+          cy={-height / 2 + pad + 8}
+          r={4}
+          fill={statusColor}
+          opacity={0.9}
+        />
+      )}
+
+      {/* Type indicator */}
+      <text
+        x={width / 2 - pad - 4}
+        y={height / 2 - pad + 2}
+        textAnchor="end"
+        fontSize={9}
+        fill={colors[data.kind]}
+        opacity={0.6}
+        fontWeight="500"
+      >
+        {data.kind.toUpperCase()}
+      </text>
+    </g>
+  )
+}
+
+export default ReactD3Node
+export type { ReactD3NodeProps }
+export { getNodeDimensions }

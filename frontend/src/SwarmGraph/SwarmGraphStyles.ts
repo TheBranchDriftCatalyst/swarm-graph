@@ -2,26 +2,26 @@ import { CSSProperties } from 'react'
 import { NodeKind, EdgeKind } from '../types'
 
 export const colors: { [k: string]: any; edge: Record<EdgeKind, string> } = {
-  container: '#00D4FF',     // Bright cyan for containers
-  network: '#FFD700',       // Golden yellow for networks  
-  image: '#FF6B35',         // Orange-red for images
-  volume: '#9D4EDD',        // Purple for volumes
+  container: '#00D4FF', // Bright cyan for containers
+  network: '#FFD700', // Golden yellow for networks
+  image: '#FF6B35', // Orange-red for images
+  volume: '#9D4EDD', // Purple for volumes
   background: '#0A0E27',
-  grid: '#2A3B5C',          // Lighter grid for better visibility
+  grid: '#2A3B5C', // Lighter grid for better visibility
   glow: '#00D4FF',
   text: '#FFFFFF',
   edge: {
-    derived_from: '#FF6B35',    // Orange for image derivation
-    connected_to: '#00D4FF',    // Cyan for network connections
-    mounted_into: '#FFD700',    // Gold for volume mounts
+    derived_from: '#FF6B35', // Orange for image derivation
+    connected_to: '#00D4FF', // Cyan for network connections
+    mounted_into: '#FFD700', // Gold for volume mounts
   },
 }
 
 export const nodeIcons: Record<NodeKind, string> = {
-  container: '📦',  // More intuitive container icon
-  network: '🌐',   // Globe for network
-  image: '💿',     // Disc for image
-  volume: '💾',    // Floppy disk for volume
+  container: '📦', // More intuitive container icon
+  network: '🌐', // Globe for network
+  image: '💿', // Disc for image
+  volume: '💾', // Floppy disk for volume
 }
 
 export const styles: {

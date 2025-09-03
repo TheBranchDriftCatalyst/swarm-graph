@@ -3,7 +3,7 @@ import { GraphNode } from './types'
 import { styles } from './SwarmGraphStyles'
 
 interface NodeDetailsProps {
-    node: GraphNode | undefined
+  node: GraphNode | undefined
 }
 
 const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
