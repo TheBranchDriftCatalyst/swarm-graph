@@ -3,9 +3,9 @@ import * as d3 from 'd3'
 import { colors, nodeIcons } from './SwarmGraphStyles'
 import { NodeData } from './interfaces'
 import { NodeKind } from '../types'
+import NodeTypeMap from './NodeTypes'
 
 // TODO: we are going to have to extract the node type data differences here.
-// For example we want to be able to show only the logo controlled by a toggle 
 // button for all nodes and individuals nodes.  We also want to define 
 // ContainerNode, ImageNode, VolumeNode, NetworkEdge... as react first components
 
@@ -15,6 +15,7 @@ interface ReactD3NodeProps {
   isHovered?: boolean
   zoom?: number
   isDimmed?: boolean
+  showLogo?: boolean
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   onClick?: () => void
@@ -63,6 +64,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   isHovered = false,
   zoom,
   isDimmed = false,
+  showLogo = true,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -78,27 +80,9 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   const pad = 12
   const imgSize = 32
 
-  // Vendor logos mapping
-  // TODO: beef up this mapping a bit more, maybe use a inlinefunc or something that can search the node
-  const vendorLogos: Record<string, string> = {
-    whoami:
-      'https://raw.githubusercontent.com/devicons/devicon/master/icons/nginx/nginx-original.svg',
-    redis:
-      'https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original.svg',
-    postgres:
-      'https://raw.githubusercontent.com/devicons/devicon/master/icons/postgresql/postgresql-original.svg',
-  }
-
-  // Determine logo URL
-  const imageRef = (data.attributes && data.attributes.image) || ''
-  let logoUrl: string | undefined
-  if (imageRef) {
-    const parts = String(imageRef).split('/')
-    const last = parts[parts.length - 1].split(':')[0]
-    if (vendorLogos[last]) {
-      logoUrl = vendorLogos[last]
-    }
-  }
+  // The per-kind components handle logo selection and rendering. We still pass
+  // layout parameters so they can place icons consistently.
+  const TypeComponent = NodeTypeMap[data.kind] || NodeTypeMap.container
 
   // Setup drag behavior
   useEffect(() => {
@@ -172,27 +156,8 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
         className="node-card"
       />
 
-      {/* Icon or Logo */}
-      {logoUrl ? (
-        <image
-          href={logoUrl}
-          x={-width / 2 + pad}
-          y={-imgSize / 2}
-          width={imgSize}
-          height={imgSize}
-          preserveAspectRatio="xMidYMid meet"
-        />
-      ) : (
-        <text
-          x={-width / 2 + pad + imgSize / 2}
-          y={8}
-          textAnchor="middle"
-          fontSize={18}
-          fill={colors[data.kind]}
-        >
-          {nodeIcons[data.kind as NodeKind]}
-        </text>
-      )}
+  {/* Icon or Logo (delegated to NodeType component for easier extraction) */}
+  <TypeComponent data={data} width={width} height={height} pad={pad} imgSize={imgSize} showLogo={showLogo} />
 
       {/* Name */}
       <text
