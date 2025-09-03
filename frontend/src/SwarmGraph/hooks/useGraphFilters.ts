@@ -1,7 +1,8 @@
 import { useEffect, useMemo } from 'react'
-import { useGraphContext, GraphFilters, NodeStatusFilter, NodeConnectionFilter } from '../context/GraphContext'
+import { useGraphContext } from '../context/GraphContext'
 import { GraphData, NodeData, EdgeData } from '../interfaces'
 import { GraphNode, NodeKind, EdgeKind, isContainerNode, isVolumeNode, isNetworkNode, isImageNode } from '../../types'
+import { GraphFilters, NodeStatusFilter, NodeConnectionFilter } from '../types/filterTypes'
 
 export const useGraphFilters = () => {
   const { state, dispatch } = useGraphContext()

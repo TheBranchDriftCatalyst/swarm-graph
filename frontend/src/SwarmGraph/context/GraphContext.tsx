@@ -1,27 +1,9 @@
 import React, { createContext, useContext, useReducer, ReactNode } from 'react'
 import { NodeKind, EdgeKind, GraphNode, GraphEdge } from '../../types'
 import { GraphData } from '../interfaces'
+import { GraphFilters, NodeStatusFilter, NodeConnectionFilter } from '../types/filterTypes'
 
-// Filter types
-export type NodeStatusFilter = 'all' | 'running' | 'stopped' | 'in-use' | 'orphaned'
-export type NodeConnectionFilter = 'all' | 'connected' | 'orphaned'
-
-export interface GraphFilters {
-  // Node type visibility
-  visibleNodes: Record<NodeKind, boolean>
-  visibleEdges: Record<EdgeKind, boolean>
-  
-  // Advanced filters
-  statusFilter: NodeStatusFilter
-  connectionFilter: NodeConnectionFilter
-  searchQuery: string
-  
-  // Custom filters
-  showOrphanedOnly: boolean
-  showRunningOnly: boolean
-  showInUseOnly: boolean
-  hideSystemResources: boolean
-}
+export type { NodeStatusFilter, NodeConnectionFilter, GraphFilters } from '../types/filterTypes'
 
 export interface GraphState {
   rawData: GraphData | null

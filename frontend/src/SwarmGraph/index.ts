@@ -1,5 +1,13 @@
-// Export context and hooks for filtering
+// 🎯 SwarmGraph with Advanced Filtering System
+// Export main component and filtering system
+
+export { default as SwarmGraph } from './SwarmGraph'
 export { GraphProvider, useGraphContext } from './context/GraphContext'
+export { useGraphFilters } from './hooks/useGraphFilters'
+export { useGraphState } from './hooks/useGraphState'
+export { default as FilterPanel } from './FilterPanel'
+
+// Export types for external use
 export type { 
   GraphFilters, 
   GraphState, 
@@ -7,14 +15,16 @@ export type {
   NodeConnectionFilter 
 } from './context/GraphContext'
 
-export { useGraphFilters } from './hooks/useGraphFilters'
-export { useGraphState } from './hooks/useGraphState'
+// Export filter types and constants
+export type * from './types/filterTypes'
+export { 
+  NODE_TYPE_OPTIONS,
+  EDGE_TYPE_OPTIONS,
+  STATUS_FILTER_OPTIONS,
+  CONNECTION_FILTER_OPTIONS
+} from './types/filterTypes'
 
-// Export components
-export { default as FilterPanel } from './FilterPanel'
-
-// Re-export existing components
-export { default as SwarmGraph } from './SwarmGraph'
+// Legacy exports for compatibility
 export { default as Legend } from './Legend'
 export { default as NodeDetails } from './NodeDetails'
 export { default as Title } from './Title'

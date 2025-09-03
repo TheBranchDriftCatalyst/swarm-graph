@@ -1,52 +1,56 @@
 # SwarmGraph Filtering System
 
-This document describes the new filtering system added to the SwarmGraph component.
+A comprehensive filtering system for the Docker Swarm graph visualization with React Context, custom hooks, and a sleek UI.
 
-## Overview
+## 🚀 Quick Start
 
-The filtering system provides a comprehensive way to filter and manipulate the graph data displayed in the SwarmGraph. It uses React Context and custom hooks to manage state and provides both a programmatic API and a UI panel for filtering.
+```tsx
+import { SwarmGraph } from './SwarmGraph'
 
-## Architecture
+function App() {
+  return <SwarmGraph data={graphData} />
+}
+```
 
-### Context and State Management
+The filtering system is automatically included - just click the gear icon (🔧) to open the filter panel.
 
-- **`GraphContext`**: Provides centralized state management for graph data, filters, and UI state
-- **`useGraphState`**: Hook for basic graph state operations (selection, dimensions, data)
-- **`useGraphFilters`**: Hook for all filtering operations and logic
+## ✨ Features
 
-### Components
+- **Real-time filtering** of nodes and edges
+- **Advanced search** by name/ID with instant results  
+- **Status-based filtering** (running, stopped, in-use, orphaned)
+- **Quick filter presets** for common scenarios
+- **System resource hiding** for cleaner views
+- **Persistent filter state** with easy reset
+- **Responsive UI** that matches the graph aesthetic
 
-- **`FilterPanel`**: UI component providing filtering controls
-- **`SwarmGraph`**: Main component updated to use the new context system
+## 🎮 Filter Controls
 
-## Filter Types
+| Filter Type | Description |
+|-------------|-------------|
+| **Node Types** | Show/hide containers, images, networks, volumes |
+| **Edge Types** | Show/hide relationships (derived_from, connected_to, mounted_into) |
+| **Status** | Filter by running, stopped, in-use states |
+| **Connection** | Show all, connected only, or orphaned only |
+| **Search** | Real-time text search of node names/IDs |
+| **Advanced** | Orphaned-only, running-only, hide system resources |
 
-### Basic Visibility Filters
-- **Node Types**: Show/hide containers, images, networks, volumes
-- **Edge Types**: Show/hide derived_from, connected_to, mounted_into relationships
+## 🔧 Quick Presets
 
-### Status Filters
-- **All Status**: Show all nodes regardless of status
-- **Running**: Show only running containers and in-use resources
-- **Stopped**: Show only stopped/exited containers
-- **In-Use**: Show only resources currently in use
+- **Show Orphaned**: Find unused resources
+- **Show Running**: Active containers only  
+- **Minimal View**: Hide clutter, show essentials
+- **Reset All**: Back to default view
 
-### Connection Filters
-- **All Nodes**: Show all nodes
-- **Connected**: Show only nodes that have edges (relationships)
-- **Orphaned**: Show only nodes with no relationships
+## 🏗️ Architecture
 
-### Advanced Filters
-- **Show Orphaned Only**: Display only nodes with no connections
-- **Show Running Only**: Display only running containers
-- **Show In-Use Only**: Display only resources currently in use
-- **Hide System Resources**: Hide default Docker resources (bridge, host, etc.)
-- **Search**: Filter nodes by name or ID
+- **GraphContext**: Centralized state management
+- **useGraphFilters**: All filtering logic and actions
+- **useGraphState**: Basic graph operations
+- **FilterPanel**: Styled UI component
+- **Responsive styles**: Matches existing graph aesthetic
 
-### Quick Filter Presets
-- **Show Orphaned**: Quick filter to show only orphaned resources
-- **Show Running**: Quick filter to show only running containers
-- **Minimal View**: Show only in-use, connected resources with system resources hidden
+Built with TypeScript, React Context, and optimized for performance.
 
 ## Usage
 

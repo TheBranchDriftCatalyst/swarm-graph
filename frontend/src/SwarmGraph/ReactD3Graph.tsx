@@ -5,7 +5,7 @@ import ReactD3Edge from './ReactD3Edge'
 import { colors } from './SwarmGraphStyles'
 import { NodeKind, EdgeKind } from '../types'
 import { NodeData, EdgeData, ReactD3GraphProps } from './interfaces'
-import { Logger } from './Logger'
+import { Logger } from '../utils'
 
 const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   data,
