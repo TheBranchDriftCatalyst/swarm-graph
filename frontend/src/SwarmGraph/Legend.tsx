@@ -1,5 +1,5 @@
 import React from 'react'
-import { NodeKind, EdgeKind } from './types'
+import { NodeKind, EdgeKind } from '../types'
 import { colors, nodeIcons, styles } from './SwarmGraphStyles'
 
 // Render legend items as compact toggle-buttons (no visible checkboxes).

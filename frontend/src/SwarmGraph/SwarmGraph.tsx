@@ -1,72 +1,143 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { GraphNode, NodeKind, EdgeKind } from '../types'
 import { styles } from './SwarmGraphStyles'
 import Legend from './Legend'
 import NodeDetails from './NodeDetails'
 import Title from './Title'
 import ReactD3Graph from './ReactD3Graph'
+import FilterPanel from './FilterPanel'
+import { GraphProvider } from './context/GraphContext'
+import { useGraphState } from './hooks/useGraphState'
+import { useGraphFilters } from './hooks/useGraphFilters'
 
-const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
-  const [dimensions, setDimensions] = useState({
-    width: window.innerWidth,
-    height: window.innerHeight,
-  })
-  const [hoveredNode, setHoveredNode] = useState<string | null>(null)
-  const [selectedNode, setSelectedNode] = useState<string | null>(null)
+// Optional demo component import
+// const FilterDemo = React.lazy(() => 
+//   import('../components/FilterDemo').catch(() => ({
+//     default: () => null
+//   }))
+// )
 
-  const [visibleNodes, setVisibleNodes] = useState<Record<NodeKind, boolean>>({
-    container: true,
-    network: true,
-    image: true,
-    volume: true,
-  })
-  const [visibleEdges, setVisibleEdges] = useState<Record<EdgeKind, boolean>>({
-    derived_from: true,
-    connected_to: true,
-    mounted_into: true,
-  })
+// Inner component that uses the context
+const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
+  const {
+    filteredData,
+    hoveredNode,
+    selectedNode,
+    dimensions,
+    setRawData,
+    setHoveredNode,
+    setSelectedNode,
+    getNodeInfo,
+  } = useGraphState()
 
-  // Resize handler
-  React.useEffect(() => {
-    const onResize = () =>
-      setDimensions({ width: window.innerWidth, height: window.innerHeight })
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
+  const { filters, toggleNodeVisibility, toggleEdgeVisibility } = useGraphFilters()
+  const [filterPanelVisible, setFilterPanelVisible] = useState(false)
 
-  // Lookup function
-  const getNodeInfo = (nodeId: string): GraphNode | undefined => {
-    if (!data || !data.nodes) {
-      return undefined
+  // Update raw data when props change
+  useEffect(() => {
+    if (data) {
+      setRawData(data)
     }
-    if (data.nodes[nodeId]) {
-      return data.nodes[nodeId]
+  }, [data, setRawData])
+
+  // If no filtered data yet, show loading or use original data
+  const displayData = filteredData || data
+
+  if (!displayData) {
+    return (
+      <div style={styles.container}>
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          height: '100vh',
+          color: 'white',
+          fontSize: '18px'
+        }}>
+          Loading graph data...
+        </div>
+      </div>
+    )
+  }
+
+  // Legacy setters for Legend component compatibility
+  const setVisibleNodes = (setter: React.SetStateAction<Record<NodeKind, boolean>>) => {
+    if (typeof setter === 'function') {
+      const newVisibility = setter(filters.visibleNodes)
+      Object.entries(newVisibility).forEach(([nodeKind, visible]) => {
+        if (visible !== filters.visibleNodes[nodeKind as NodeKind]) {
+          toggleNodeVisibility(nodeKind as NodeKind)
+        }
+      })
+    } else {
+      Object.entries(setter).forEach(([nodeKind, visible]) => {
+        if (visible !== filters.visibleNodes[nodeKind as NodeKind]) {
+          toggleNodeVisibility(nodeKind as NodeKind)
+        }
+      })
     }
-    return Object.values(data.nodes).find((n: any) =>
-      [n.id, n.ID, n.Id, n.Name, n.name].some(
-        (v) => String(v) === String(nodeId)
-      )
-    ) as GraphNode | undefined
+  }
+
+  const setVisibleEdges = (setter: React.SetStateAction<Record<EdgeKind, boolean>>) => {
+    if (typeof setter === 'function') {
+      const newVisibility = setter(filters.visibleEdges)
+      Object.entries(newVisibility).forEach(([edgeKind, visible]) => {
+        if (visible !== filters.visibleEdges[edgeKind as EdgeKind]) {
+          toggleEdgeVisibility(edgeKind as EdgeKind)
+        }
+      })
+    } else {
+      Object.entries(setter).forEach(([edgeKind, visible]) => {
+        if (visible !== filters.visibleEdges[edgeKind as EdgeKind]) {
+          toggleEdgeVisibility(edgeKind as EdgeKind)
+        }
+      })
+    }
+  }
+
+  // Wrapper for setSelectedNode to match ReactD3Graph interface
+  const wrappedSetSelectedNode: React.Dispatch<React.SetStateAction<string | null>> = (value) => {
+    if (typeof value === 'function') {
+      setSelectedNode(value(selectedNode))
+    } else {
+      setSelectedNode(value)
+    }
   }
 
   return (
     <div style={styles.container}>
       <ReactD3Graph
-        data={data}
+        data={displayData}
         dimensions={dimensions}
-        visibleNodes={visibleNodes}
-        visibleEdges={visibleEdges}
+        visibleNodes={filters.visibleNodes}
+        visibleEdges={filters.visibleEdges}
         setHoveredNode={setHoveredNode}
-        setSelectedNode={setSelectedNode}
+        setSelectedNode={wrappedSetSelectedNode}
         hoveredNode={hoveredNode}
         selectedNode={selectedNode}
       />
       <Legend
-        {...{ visibleNodes, setVisibleNodes, visibleEdges, setVisibleEdges }}
+        visibleNodes={filters.visibleNodes}
+        setVisibleNodes={setVisibleNodes}
+        visibleEdges={filters.visibleEdges}
+        setVisibleEdges={setVisibleEdges}
       />
-      <NodeDetails node={getNodeInfo(hoveredNode || selectedNode || '')} />
+      <NodeDetails node={getNodeInfo(hoveredNode || selectedNode)} />
       <Title />
+      <FilterPanel 
+        isVisible={filterPanelVisible}
+        onToggle={() => setFilterPanelVisible(!filterPanelVisible)}
+      />
     </div>
+  )
+}
+
+// Main component with provider
+const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
+  return (
+    <GraphProvider>
+      <SwarmGraphInner data={data} />
+    </GraphProvider>
   )
 }
 
