@@ -2,17 +2,137 @@ import React from 'react'
 import { colors } from './SwarmGraphStyles'
 import { EdgeData } from './interfaces'
 import { EdgeKind } from '../types'
+import { getNodeDimensions } from './ReactD3Node'
 
 interface ReactD3EdgeProps {
   data: EdgeData
+  zoom?: number
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   isDimmed?: boolean
 }
 
+// Function to calculate edge endpoints that intersect with rectangular node boundaries
+const calculateEdgeEndpoints = (
+  sourceX: number, 
+  sourceY: number, 
+  targetX: number, 
+  targetY: number,
+  sourceNode: any,
+  targetNode: any,
+  zoom: number = 1
+) => {
+  // Calculate the direction vector
+  const dx = targetX - sourceX
+  const dy = targetY - sourceY
+  const distance = Math.sqrt(dx * dx + dy * dy)
+  
+  if (distance === 0) {
+    return {
+      x1: sourceX,
+      y1: sourceY,
+      x2: targetX,
+      y2: targetY
+    }
+  }
+  
+  // Normalize the direction vector
+  const unitX = dx / distance
+  const unitY = dy / distance
+  
+  // Get actual node dimensions
+  const sourceDimensions = getNodeDimensions(sourceNode)
+  const targetDimensions = getNodeDimensions(targetNode)
+  
+  // Apply the same visual scaling as nodes do (inverse of zoom, clamped)
+  const visualScale = Math.max(0.5, Math.min(1.2, 1 / zoom))
+  const sourceWidth = sourceDimensions.width * visualScale
+  const sourceHeight = sourceDimensions.height * visualScale
+  const targetWidth = targetDimensions.width * visualScale
+  const targetHeight = targetDimensions.height * visualScale
+  
+  // Function to find intersection with rectangular boundary
+  const findRectIntersection = (centerX: number, centerY: number, width: number, height: number, dirX: number, dirY: number) => {
+    const halfWidth = width / 2
+    const halfHeight = height / 2
+    
+    // Calculate intersection with each edge and find the closest valid one
+    const intersections = []
+    
+    // Right edge
+    if (dirX > 0) {
+      const t = halfWidth / dirX
+      const y = dirY * t
+      if (Math.abs(y) <= halfHeight) {
+        intersections.push({ x: centerX + halfWidth, y: centerY + y, t })
+      }
+    }
+    
+    // Left edge  
+    if (dirX < 0) {
+      const t = -halfWidth / dirX
+      const y = dirY * t
+      if (Math.abs(y) <= halfHeight) {
+        intersections.push({ x: centerX - halfWidth, y: centerY + y, t })
+      }
+    }
+    
+    // Bottom edge
+    if (dirY > 0) {
+      const t = halfHeight / dirY
+      const x = dirX * t
+      if (Math.abs(x) <= halfWidth) {
+        intersections.push({ x: centerX + x, y: centerY + halfHeight, t })
+      }
+    }
+    
+    // Top edge
+    if (dirY < 0) {
+      const t = -halfHeight / dirY
+      const x = dirX * t
+      if (Math.abs(x) <= halfWidth) {
+        intersections.push({ x: centerX + x, y: centerY - halfHeight, t })
+      }
+    }
+    
+    // Return the intersection with smallest positive t (closest to center in the direction)
+    const validIntersections = intersections.filter(int => int.t > 0)
+    if (validIntersections.length === 0) {
+      return { x: centerX, y: centerY }
+    }
+    
+    const closest = validIntersections.reduce((min, current) => 
+      current.t < min.t ? current : min
+    )
+    
+    return { x: closest.x, y: closest.y }
+  }
+  
+  // Calculate intersection points for both nodes using scaled dimensions
+  const sourceIntersection = findRectIntersection(
+    sourceX, sourceY, 
+    sourceWidth, sourceHeight, 
+    unitX, unitY
+  )
+  
+  const targetIntersection = findRectIntersection(
+    targetX, targetY, 
+    targetWidth, targetHeight, 
+    -unitX, -unitY  // Reverse direction for target
+  )
+  
+  return { 
+    x1: sourceIntersection.x, 
+    y1: sourceIntersection.y, 
+    x2: targetIntersection.x, 
+    y2: targetIntersection.y 
+  }
+}
+
 const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   data,
+  zoom = 1,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -90,7 +210,18 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   const labelText = getLabelText()
   const showLabel = labelText !== null
 
-  // Calculate midpoint for label positioning
+  // Calculate edge endpoints that stop at node boundaries
+  const edgePoints = calculateEdgeEndpoints(
+    data.source.x || 0,
+    data.source.y || 0,
+    data.target.x || 0,
+    data.target.y || 0,
+    data.source,
+    data.target,
+    zoom
+  )
+
+  // Calculate midpoint for label positioning (use original centers for label)
   const midX = ((data.source.x || 0) + (data.target.x || 0)) / 2
   const midY = ((data.source.y || 0) + (data.target.y || 0)) / 2
 
@@ -101,14 +232,13 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
     <g className="edge-group">
       {/* Edge line */}
       <line
-        x1={data.source.x || 0}
-        y1={data.source.y || 0}
-        x2={data.target.x || 0}
-        y2={data.target.y || 0}
+        x1={edgePoints.x1}
+        y1={edgePoints.y1}
+        x2={edgePoints.x2}
+        y2={edgePoints.y2}
         stroke={colors.edge[data.kind as EdgeKind]}
         strokeWidth={2}
         strokeOpacity={isDimmed ? 0.18 : 0.8}
-        markerEnd={`url(#arrow-${data.kind})`}
         style={{ cursor: onClick ? 'pointer' : 'default' }}
         onClick={onClick}
         onMouseEnter={onMouseEnter}

@@ -366,7 +366,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
           )
         })}
 
-  {/* Arrow markers for edges */}
+        {/* Arrow markers for edges - commented out since we removed arrows */}
+        {/*
         {Object.keys(colors.edge).map((edgeType) => {
           const color = colors.edge[edgeType as EdgeKind]
           return (
@@ -374,7 +375,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
               key={edgeType}
               id={`arrow-${edgeType}`}
               viewBox="0 -5 10 10"
-              refX={8}
+              refX={10}
               refY={0}
               markerWidth={6}
               markerHeight={6}
@@ -384,6 +385,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
             </marker>
           )
         })}
+        */}
       </defs>
 
       {/* Glow/drop-shadow filter used for hovered/selected nodes */}
@@ -415,6 +417,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
             <ReactD3Edge
               key={`${edge.src}-${edge.dst}-${index}`}
               data={edge}
+              zoom={zoomScale}
               isDimmed={
                 Boolean(
                   hoveredNode &&
