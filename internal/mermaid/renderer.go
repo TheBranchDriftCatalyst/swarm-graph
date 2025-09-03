@@ -137,6 +137,11 @@ type RenderOptions struct {
 	// to derive the short repo name from node.Attributes["image"].
 	VendorLogos map[string]string
 
+	// Theme selects a built-in theme for default class defs. "synthwave" is the
+	// default which produces a dark neon/cyberpunk palette. Callers may append
+	// ExtraClassDefs to override specifics.
+	Theme string
+
 	// Filtering options applied before rendering. These allow callers to
 	// restrict which nodes/edges are included in the output. They are
 	// intentionally simple and implemented server-side so the UI can request
@@ -144,6 +149,18 @@ type RenderOptions struct {
 	// FilterStack, if non-empty, will include only nodes with
 	// Attributes["stack"] == FilterStack.
 	FilterStack string
+
+	// FilterNameContains restricts nodes to those whose Name (or derived
+	// short id) contains this substring (case-insensitive). Empty disables.
+	FilterNameContains string
+
+	// MinDegree, when >0, excludes nodes with fewer than MinDegree incident
+	// edges (degree computed after other filters are applied).
+	MinDegree int
+
+	// ExcludeKinds lists node kinds to exclude from the render (inverse of
+	// FilterKinds which is an allow-list). Useful for hiding images/networks.
+	ExcludeKinds []NodeKind
 
 	// ExcludeOrphans removes any nodes that have zero incident edges after
 	// all other filters are applied.
@@ -194,7 +211,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 	})
 
 	// Apply filters (if any) to produce a view of nodes/edges we'll render.
-	if opts.FilterStack != "" || opts.ExcludeOrphans || len(opts.FilterKinds) > 0 {
+	if opts.FilterStack != "" || opts.ExcludeOrphans || len(opts.FilterKinds) > 0 || opts.FilterNameContains != "" || opts.MinDegree > 0 || len(opts.ExcludeKinds) > 0 {
 		m.Debug("applying render filters", "stack", opts.FilterStack, "exclude_orphans", opts.ExcludeOrphans, "kinds", opts.FilterKinds)
 		// Build a set of allowed kinds if provided
 		allowedKinds := map[NodeKind]struct{}{}
@@ -203,9 +220,17 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 				allowedKinds[k] = struct{}{}
 			}
 		}
+		// Build a set of excluded kinds if provided
+		excludedKinds := map[NodeKind]struct{}{}
+		if len(opts.ExcludeKinds) > 0 {
+			for _, k := range opts.ExcludeKinds {
+				excludedKinds[k] = struct{}{}
+			}
+		}
 
 		// Filter nodes by stack and kinds
 		filtered := make(map[string]Node, 0)
+		nameFilter := strings.ToLower(strings.TrimSpace(opts.FilterNameContains))
 		for id, n := range nodes {
 			if opts.FilterStack != "" {
 				if n.Attributes == nil || n.Attributes["stack"] != opts.FilterStack {
@@ -214,6 +239,20 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 			}
 			if len(allowedKinds) > 0 {
 				if _, ok := allowedKinds[n.Kind]; !ok {
+					continue
+				}
+			}
+			if len(excludedKinds) > 0 {
+				if _, ok := excludedKinds[n.Kind]; ok {
+					continue
+				}
+			}
+			if nameFilter != "" {
+				name := strings.ToLower(n.Name)
+				if name == "" {
+					name = strings.ToLower(ShortID(n.ID))
+				}
+				if !strings.Contains(name, nameFilter) {
 					continue
 				}
 			}
@@ -259,6 +298,32 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 			newEdges = tmp
 		}
 
+		// Optionally apply MinDegree after previous filtering (degree in newEdges)
+		if opts.MinDegree > 0 {
+			incident := map[string]int{}
+			for _, e := range newEdges {
+				incident[e.Src]++
+				incident[e.Dst]++
+			}
+			for id := range filtered {
+				if incident[id] < opts.MinDegree {
+					delete(filtered, id)
+				}
+			}
+			// Re-filter edges to remaining nodes
+			tmp := newEdges[:0]
+			for _, e := range newEdges {
+				if _, ok := filtered[e.Src]; !ok {
+					continue
+				}
+				if _, ok := filtered[e.Dst]; !ok {
+					continue
+				}
+				tmp = append(tmp, e)
+			}
+			newEdges = tmp
+		}
+
 		// Replace nodes/edges for rendering
 		nodes = filtered
 		edges = newEdges
@@ -277,8 +342,22 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 		dir = "LR"
 	}
 	var buf bytes.Buffer
-	fmt.Fprintf(&buf, "flowchart %s\n", dir)
 
+	// Emit an init block so Mermaid uses a dark synthwave themeVariables set.
+	// This helps ensure a dark background and consistent neon colors are used
+	// by renderers (Kroki, Mermaid live, etc.). Users may still override
+	// specifics via ExtraClassDefs.
+	th := strings.ToLower(strings.TrimSpace(opts.Theme))
+	if th == "" {
+		th = "synthwave"
+	}
+	if th == "synthwave" || th == "cyberpunk" || th == "neon" {
+	initBlock := `%%{ init: { 'theme': 'dark', 'themeVariables': { 'background':'#0a0e27', 'primaryColor':'#3a86ff', 'primaryTextColor':'#bfe3ff', 'secondaryColor':'#ff006e', 'tertiaryColor':'#8338ec', 'edgeLabelBackground':'#0a0e27', 'clusterBkg':'#071028', 'clusterBorder':'#3a86ff', 'nodeTextColor':'#bfe3ff', 'fontFamily':'"Source Code Pro", "Fira Code", monospace' } } }%%`
+
+		buf.WriteString(initBlock)
+	}
+
+	fmt.Fprintf(&buf, "flowchart %s\n", dir)
 	// Classes (node kinds)
 	writeDefaultClassDefs(&buf, opts)
 	for _, extra := range opts.ExtraClassDefs {
@@ -511,13 +590,30 @@ func LoadInfraGraph(r io.Reader) (InfraGraph, error) {
 // ===== Internals =====
 
 func writeDefaultClassDefs(buf *bytes.Buffer, opts RenderOptions) {
-	// Synthwave-friendly default palette; override with ExtraClassDefs if needed.
-	// Node class names match NodeKind values for simplicity.
+	// Default palettes. Support a "synthwave" theme (dark neon) and a
+	// fallback minimal light theme. Callers may append ExtraClassDefs to
+	// further customize visuals.
 	buf.WriteString("  %% Node classes\n")
-	buf.WriteString("  classDef container fill:#0a0e27,stroke:#3a86ff,stroke-width:2px,color:#bfe3ff;\n")
-	buf.WriteString("  classDef network   fill:#0a0e27,stroke:#ff006e,stroke-width:2px,color:#ffd1e3;\n")
-	buf.WriteString("  classDef image     fill:#0a0e27,stroke:#8338ec,stroke-width:2px,color:#e0d0ff;\n")
-	buf.WriteString("  classDef volume    fill:#0a0e27,stroke:#ffbe0b,stroke-width:2px,color:#fff3c4;\n")
+	theme := strings.ToLower(strings.TrimSpace(opts.Theme))
+	if theme == "" {
+		theme = "synthwave"
+	}
+	switch theme {
+	case "synthwave", "cyberpunk", "neon":
+		// Dark background friendly neon palette
+		buf.WriteString("  classDef container fill:#0a0e27,stroke:#3a86ff,stroke-width:2px,color:#bfe3ff;\n")
+		buf.WriteString("  classDef network   fill:#0a0e27,stroke:#ff006e,stroke-width:2px,color:#ffd1e3;\n")
+		buf.WriteString("  classDef image     fill:#0a0e27,stroke:#8338ec,stroke-width:2px,color:#e0d0ff;\n")
+		buf.WriteString("  classDef volume    fill:#0a0e27,stroke:#ffbe0b,stroke-width:2px,color:#fff3c4;\n")
+		// Add some glow-like outline classes for emphasis
+		buf.WriteString("  classDef highlight stroke:#00ffb3,stroke-width:3px;\n")
+	default:
+		// Minimal, accessible light palette
+		buf.WriteString("  classDef container fill:#f0f8ff,stroke:#3a86ff,stroke-width:1px,color:#002a4e;\n")
+		buf.WriteString("  classDef network   fill:#fff0f6,stroke:#ff006e,stroke-width:1px,color:#3a0020;\n")
+		buf.WriteString("  classDef image     fill:#f8f0ff,stroke:#8338ec,stroke-width:1px,color:#2a004e;\n")
+		buf.WriteString("  classDef volume    fill:#fffbe6,stroke:#ffbe0b,stroke-width:1px,color:#3a2a00;\n")
+	}
 }
 
 // ... existing helpers follow
