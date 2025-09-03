@@ -6,6 +6,8 @@ interface NodeDetailsProps {
   node: GraphNode | undefined
 }
 
+// TODO: create a GO url that runs docker inspect on the node/task id.  Do this in internal/httpapi
+
 const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
   if (!node) return null
   return (

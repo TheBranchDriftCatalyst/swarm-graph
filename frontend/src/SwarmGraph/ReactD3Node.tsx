@@ -68,8 +68,9 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   const imgSize = 32
 
   // Vendor logos mapping
+  // TODO: beef up this mapping a bit more, maybe use a inlinefunc or something that can search the node
   const vendorLogos: Record<string, string> = {
-    nginx:
+    whoami:
       'https://raw.githubusercontent.com/devicons/devicon/master/icons/nginx/nginx-original.svg',
     redis:
       'https://raw.githubusercontent.com/devicons/devicon/master/icons/redis/redis-original.svg',
@@ -118,7 +119,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
         ? '#FF3B30'
         : '#FFA500'
   const statusText =
-    status === 'running'
+    (status === 'running' || status === 'IN-USE')
       ? '#7CFC00'
       : status === 'stopped'
         ? '#FF6B6B'
