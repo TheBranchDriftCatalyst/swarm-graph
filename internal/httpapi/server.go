@@ -13,6 +13,7 @@ import (
 	"strings"
 	"swarm-graph/internal/mermaid"
 	"swarm-graph/internal/store"
+	"swarm-graph/internal/utils"
 	"text/template"
 	"time"
 )
@@ -56,7 +57,18 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 
 	// Initialize controllers
 	graphController := NewGraphController(st, log, opts)
-	dockerController := NewDockerController(st, log)
+
+	// Create a shared Docker client for the HTTP handlers so we avoid creating a
+	// new client per request. If creation fails, continue but mark docker as
+	// unavailable (nil) and log the error.
+	var dockerClient *utils.DockerClient
+	if dc, err := utils.NewDockerClient(log); err != nil {
+		log.Warn("failed to create shared docker client for http handlers", "err", err.Error())
+	} else {
+		dockerClient = dc
+	}
+
+	dockerController := NewDockerController(st, log, dockerClient)
 	healthController := NewHealthController(log)
 
 	// Register routes

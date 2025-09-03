@@ -7,6 +7,8 @@ import (
 	"log/slog"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
@@ -71,7 +73,7 @@ func (dc *DockerClient) InspectImage(ctx context.Context, imageID string) ([]byt
 
 // InspectNetwork inspects a network by ID and returns the inspection data as JSON
 func (dc *DockerClient) InspectNetwork(ctx context.Context, networkID string) ([]byte, error) {
-	inspect, err := dc.client.NetworkInspect(ctx, networkID, types.NetworkInspectOptions{})
+	inspect, err := dc.client.NetworkInspect(ctx, networkID, network.InspectOptions{})
 	if err != nil {
 		dc.logger.Warn("network inspect failed", "id", networkID, "err", err.Error())
 		return nil, fmt.Errorf("network inspect failed: %w", err)
@@ -127,3 +129,24 @@ func (dc *DockerClient) InspectAny(ctx context.Context, id string) ([]byte, erro
 
 	return nil, fmt.Errorf("resource not found: %s", id)
 }
+
+// Ping performs a lightweight ping to the Docker daemon.
+func (dc *DockerClient) Ping(ctx context.Context) (types.Ping, error) {
+	resp, err := dc.client.Ping(ctx)
+	if err != nil {
+		dc.logger.Debug("docker ping failed", "err", err.Error())
+		return types.Ping{}, err
+	}
+	dc.logger.Debug("docker ping ok", "apiVersion", resp.APIVersion)
+	return resp, nil
+}
+
+// Events returns a Docker event stream for the caller to consume.
+func (dc *DockerClient) Events(ctx context.Context, lo events.ListOptions) (<-chan events.Message, <-chan error) {
+	dc.logger.Debug("docker events subscribe", "filters", lo.Filters)
+	return dc.client.Events(ctx, lo)
+}
+
+// ListContainers lists containers; all=true includes stopped containers.
+
+// ListImages lists images.

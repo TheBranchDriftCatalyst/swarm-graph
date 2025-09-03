@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -16,13 +15,15 @@ import (
 type DockerController struct {
 	store  *store.MemoryStore
 	logger *slog.Logger
+	docker *utils.DockerClient
 }
 
 // NewDockerController creates a new DockerController
-func NewDockerController(store *store.MemoryStore, logger *slog.Logger) *DockerController {
+func NewDockerController(store *store.MemoryStore, logger *slog.Logger, docker *utils.DockerClient) *DockerController {
 	return &DockerController{
 		store:  store,
 		logger: logger.With("controller", "docker"),
+		docker: docker,
 	}
 }
 
@@ -33,29 +34,33 @@ func (dc *DockerController) InspectHandler(w http.ResponseWriter, r *http.Reques
 		httpError(dc.logger, w, r, http.StatusBadRequest, "missing id param")
 		return
 	}
-
-	// Create Docker client
-	dockerClient, err := utils.NewDockerClient(dc.logger)
-	if err != nil {
-		httpError(dc.logger, w, r, http.StatusInternalServerError, "failed to create docker client: %v", err)
+	start := time.Now()
+	// Ensure a docker client is available
+	if dc.docker == nil {
+		dc.logger.Warn("inspect requested but docker client unavailable", "id", id, "remote", r.RemoteAddr)
+		httpError(dc.logger, w, r, http.StatusServiceUnavailable, "docker client unavailable")
 		return
 	}
-	defer dockerClient.Close()
 
 	// Short timeout for docker API calls
 	ctx := r.Context()
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
-	// Try to inspect the resource
-	data, err := dockerClient.InspectAny(ctx, id)
+	data, err := dc.docker.InspectAny(ctx, id)
 	if err != nil {
-		// Log warning and return a 500 with error message for easier debugging
+		// Distinguish not-found vs other errors
 		dc.logger.Warn("docker inspect failed", "id", id, "err", err.Error())
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		http.Error(w, fmt.Sprintf("docker inspect error: %s", err.Error()), http.StatusInternalServerError)
+		code := http.StatusInternalServerError
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			code = http.StatusNotFound
+		}
+		httpError(dc.logger, w, r, code, "docker inspect error: %v", err)
 		return
 	}
+
+	elapsed := time.Since(start)
+	dc.logger.Info("docker inspect ok", "id", id, "size", len(data), "took_ms", elapsed.Milliseconds(), "remote", r.RemoteAddr)
 
 	// Return the JSON from docker inspect
 	setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
