@@ -1,5 +1,9 @@
 version: "3"
 
+# TODO add swagger generation command here as well
+# TODO: extract docker commands into a Taskfile.Docker.yml 
+# Also do the same for common go commands then include them here
+
 tasks:
 
   # Get all missing dependencies based on imports

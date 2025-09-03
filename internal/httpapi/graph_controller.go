@@ -29,6 +29,24 @@ func NewGraphController(store *store.MemoryStore, logger *slog.Logger, opts Opti
 }
 
 // MermaidHandler returns raw Mermaid source
+// @Summary Mermaid source
+// @Description Return raw Mermaid diagram source (text/plain) with optional query filters
+// @Produce text/plain
+// @Param stack query string false "Filter by stack attribute"
+// @Param exclude_orphans query string false "Exclude nodes with zero degree (1/true)"
+// @Param kinds query string false "Comma-separated kinds to include (container,image,network,volume)"
+// @Param dir query string false "Layout direction (LR, RL, TB, BT)"
+// @Param name query string false "Name substring filter (case-insensitive)"
+// @Param min_degree query int false "Minimum incident edges to include node"
+// @Param exclude_kinds query string false "Comma-separated kinds to exclude"
+// @Param show_ids query string false "Append short IDs to labels (1/true)"
+// @Param max_label_runes query int false "Truncate labels to this many runes (0 disables)"
+// @Param group_by query string false "Group nodes by this attribute into subgraphs"
+// @Param theme query string false "Theme name (synthwave/cyberpunk/neon)"
+// @Param include_legend query string false "Include legend in output (1/true)"
+// @Success 200 {string} string
+// @Failure 500 {string} string
+// @Router /graph.mmd [get]
 func (gc *GraphController) MermaidHandler(w http.ResponseWriter, r *http.Request) {
 	g := gc.store.Snapshot()
 	// Parse filtering query params
@@ -115,6 +133,10 @@ func (gc *GraphController) MermaidHandler(w http.ResponseWriter, r *http.Request
 }
 
 // JSONHandler returns graph snapshot as JSON
+// @Summary Graph JSON snapshot
+// @Produce application/json
+// @Success 200 {object} map[string]interface{}
+// @Router /graph.json [get]
 func (gc *GraphController) JSONHandler(w http.ResponseWriter, r *http.Request) {
 	snap := gc.store.Snapshot()
 	setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
@@ -124,11 +146,22 @@ func (gc *GraphController) JSONHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SVGHandler returns rendered SVG via Kroki
+// @Summary Rendered SVG
+// @Produce image/svg+xml
+// @Param stack query string false "Filter by stack"
+// @Param kinds query string false "Comma-separated kinds"
+// @Param dir query string false "Layout direction"
+// @Success 200 {file} file
+// @Router /graph.svg [get]
 func (gc *GraphController) SVGHandler(w http.ResponseWriter, r *http.Request) {
 	serveRendered(w, r, gc.store, gc.options, gc.logger, "svg", "image/svg+xml")
 }
 
 // PNGHandler returns rendered PNG via Kroki
+// @Summary Rendered PNG
+// @Produce image/png
+// @Success 200 {file} file
+// @Router /graph.png [get]
 func (gc *GraphController) PNGHandler(w http.ResponseWriter, r *http.Request) {
 	serveRendered(w, r, gc.store, gc.options, gc.logger, "png", "image/png")
 }

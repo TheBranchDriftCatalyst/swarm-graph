@@ -1,3 +1,10 @@
+// @title Swarm Graph API
+// @version 0.0.0
+// @description API for rendering swarm graphs and inspecting docker resources.
+// @contact.name Catalyst Dev
+// @contact.email dev@example.com
+// @host localhost:8080
+// @BasePath /
 package httpapi
 
 import (
@@ -16,7 +23,18 @@ import (
 	"swarm-graph/internal/utils"
 	"text/template"
 	"time"
+
+	httpSwagger "github.com/swaggo/http-swagger"
+
+	// embed swagger.json so we can serve /swagger/doc.json even if the swag
+	// generated docs.go (docs.ReadDoc) is not present. This keeps the dev
+	// experience simple: the generated swagger.json/yaml in internal/httpapi/docs
+	// will be included in the binary.
+	_ "embed"
 )
+
+//go:embed docs/swagger.json
+var swaggerJSON []byte
 
 /*
    Endpoints:
@@ -78,6 +96,18 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	router.HandleFunc("/graph.png", graphController.PNGHandler)
 	router.HandleFunc("/docker/inspect", dockerController.InspectHandler)
 	router.HandleFunc("/health", healthController.HealthHandler)
+
+	// Swagger UI (served if swag generated docs exist). Install the swag CLI
+	// and run `swag init -g internal/httpapi/server.go -o internal/httpapi/docs`
+	// to generate docs. The UI will then be available at /swagger/index.html
+	// Serve a minimal doc JSON at /swagger/doc.json so the UI can load it.
+	// Serve the generated swagger.json embedded in the binary so the UI can load it.
+	router.HandleFunc("/swagger/doc.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_, _ = w.Write(swaggerJSON)
+	})
+	// Serve the Swagger UI; point it to our doc.json
+	router.Handle("/swagger/", httpSwagger.WrapHandler)
 
 	// Static assets
 	// router.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(uiFS))))

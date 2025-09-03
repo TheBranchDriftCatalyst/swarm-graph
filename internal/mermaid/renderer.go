@@ -352,7 +352,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 		th = "synthwave"
 	}
 	if th == "synthwave" || th == "cyberpunk" || th == "neon" {
-	initBlock := `%%{ init: { 'theme': 'dark', 'themeVariables': { 'background':'#0a0e27', 'primaryColor':'#3a86ff', 'primaryTextColor':'#bfe3ff', 'secondaryColor':'#ff006e', 'tertiaryColor':'#8338ec', 'edgeLabelBackground':'#0a0e27', 'clusterBkg':'#071028', 'clusterBorder':'#3a86ff', 'nodeTextColor':'#bfe3ff', 'fontFamily':'"Source Code Pro", "Fira Code", monospace' } } }%%`
+		initBlock := `%%{ init: { 'theme': 'dark', 'themeVariables': { 'background':'#0a0e27', 'primaryColor':'#3a86ff', 'primaryTextColor':'#bfe3ff', 'secondaryColor':'#ff006e', 'tertiaryColor':'#8338ec', 'edgeLabelBackground':'#0a0e27', 'clusterBkg':'#071028', 'clusterBorder':'#3a86ff', 'nodeTextColor':'#bfe3ff', 'fontFamily':'"Source Code Pro", "Fira Code", monospace' } } }%%`
 
 		buf.WriteString(initBlock)
 	}

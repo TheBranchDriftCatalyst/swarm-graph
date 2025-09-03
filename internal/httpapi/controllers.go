@@ -28,6 +28,13 @@ func NewDockerController(store *store.MemoryStore, logger *slog.Logger, docker *
 }
 
 // InspectHandler handles Docker inspect requests
+// @Summary Inspect Docker resource
+// @Produce application/json
+// @Param id query string true "docker resource id or name"
+// @Success 200 {object} object
+// @Failure 400 {string} string
+// @Failure 404 {string} string
+// @Router /docker/inspect [get]
 func (dc *DockerController) InspectHandler(w http.ResponseWriter, r *http.Request) {
 	id := strings.TrimSpace(r.URL.Query().Get("id"))
 	if id == "" {
