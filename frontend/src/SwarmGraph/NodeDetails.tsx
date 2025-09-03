@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { GraphNode } from './types'
+import { GraphNode } from '../types'
 import { styles } from './SwarmGraphStyles'
+import JsonTreeView from './components/JsonTreeView'
 
 interface NodeDetailsProps {
-  node: GraphNode | undefined
+  // Accept any here temporarily to avoid cross-file type mismatch while we
+  // focus on implementing JsonTreeView. A follow-up can tighten this.
+  node: any
 }
 
 // TODO: create a GO url that runs docker inspect on the node/task id.  Do this in internal/httpapi
@@ -48,7 +51,7 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
           const txt = await res.text()
           // Try to pretty-print JSON if possible
           try {
-            const obj = JSON.parse(txt)
+            const obj = JSON.parse(txt)[0]
             const pretty = JSON.stringify(obj, null, 2)
             if (!aborted) {
               setInspectJSON(pretty)
@@ -106,6 +109,29 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
     }
   }
 
+// Helper: build nested object from dot-notated label keys
+const buildLabelTree = (labels: Record<string, any>) => {
+  const root: Record<string, any> = {}
+  Object.entries(labels || {}).forEach(([key, val]) => {
+    const parts = String(key).split('.')
+    let cur = root
+    for (let i = 0; i < parts.length; i++) {
+      const p = parts[i]
+      if (i === parts.length - 1) {
+        cur[p] = val
+      } else {
+        if (!cur[p] || typeof cur[p] !== 'object') {
+          cur[p] = {}
+        }
+        cur = cur[p]
+      }
+    }
+  })
+  return root
+}
+
+// Use reusable JsonTreeView component (keeps internal expansion state)
+
   return (
     <div style={panelStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -143,9 +169,20 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
             <div style={{ marginTop: 6 }}>
               {loading && <div style={{ fontSize: 12 }}>Loading…</div>}
               {err && <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12, color: '#f66' }}>{err}</pre>}
-              {inspectJSON && (
-                <pre style={{ maxHeight: isFullscreen ? '70vh' : '60vh', overflow: 'auto', fontSize: 12, background: '#06111a', color: '#cfe', padding: 12, borderRadius: 8 }}>{inspectJSON}</pre>
-              )}
+              {inspectJSON && (() => {
+                try {
+                  const parsed = JSON.parse(inspectJSON)
+                  return (
+                    <div style={{ maxHeight: isFullscreen ? '70vh' : '60vh', overflow: 'auto', padding: 8, borderRadius: 8, background: '#06111a' }}>
+                      <JsonTreeView data={parsed} rootName={parsed?.Name || parsed?.Id || 'inspect'} />
+                    </div>
+                  )
+                } catch (e) {
+                  return (
+                    <pre style={{ maxHeight: isFullscreen ? '70vh' : '60vh', overflow: 'auto', fontSize: 12, background: '#06111a', color: '#cfe', padding: 12, borderRadius: 8 }}>{inspectJSON}</pre>
+                  )
+                }
+              })()}
               {!loading && !err && !inspectJSON && (<div style={{ fontSize: 12, color: '#888' }}>No data</div>)}
             </div>
           </div>
@@ -154,11 +191,39 @@ const NodeDetails: React.FC<NodeDetailsProps> = ({ node }) => {
         {activeTab === 'labels' && (
           <div style={{ fontSize: 13 }}>
             <div style={{ marginBottom: 8, color: '#FFBE0B' }}>Labels</div>
-            {node.attributes && (node.attributes.labels || node.attributes.Labels) ? (
-              <div style={{ fontSize: 12, whiteSpace: 'pre-wrap' }}>{JSON.stringify(node.attributes.labels || node.attributes.Labels, null, 2)}</div>
-            ) : (
-              <div style={{ fontSize: 12, color: '#888' }}>No labels</div>
-            )}
+            {/* Prefer labels from inspect JSON (server response). Fallback to node attributes if inspect not available. */}
+            {(() => {
+              // Try to extract labels from the inspect JSON first
+              let labelsObj: any = null
+              if (inspectJSON) {
+                try {
+                  const parsed = JSON.parse(inspectJSON)
+                  // Docker inspect returns an object; labels are often at top-level 'Labels' or under 'Config.Labels'
+                  labelsObj = parsed?.Labels ?? parsed?.Config?.Labels ?? null
+                } catch (e) {
+                  // inspectJSON might not be valid JSON here; ignore
+                  labelsObj = null
+                }
+              }
+
+              // Fallback to node attributes / node.labels
+              if (!labelsObj) {
+                const attrs: any = node?.attributes ?? {}
+                labelsObj = attrs.labels ?? attrs.Labels ?? null
+              }
+
+              if (labelsObj && Object.keys(labelsObj).length > 0) {
+                // If labels are a flat map, convert to nested tree for display
+                const labelTree = buildLabelTree(labelsObj)
+                return (
+                  <div style={{ maxHeight: isFullscreen ? '70vh' : '60vh', overflow: 'auto', padding: 8, borderRadius: 8, background: '#06111a' }}>
+                    <JsonTreeView data={labelTree} rootName="labels" />
+                  </div>
+                )
+              }
+
+              return <div style={{ fontSize: 12, color: '#888' }}>No labels</div>
+            })()}
           </div>
         )}
       </div>
