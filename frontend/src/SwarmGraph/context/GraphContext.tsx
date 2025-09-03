@@ -25,6 +25,7 @@ export interface GraphState {
   selectedNode: string | null
   dimensions: { width: number; height: number }
   layout: 'force' | 'structured'
+  orthogonalEdges: boolean
 }
 
 // Action types
@@ -39,6 +40,7 @@ type GraphAction =
   | { type: 'TOGGLE_EDGE_VISIBILITY'; payload: EdgeKind }
   | { type: 'RESET_FILTERS' }
   | { type: 'SET_LAYOUT'; payload: 'force' | 'structured' }
+  | { type: 'TOGGLE_ORTHOGONAL_EDGES' }
 
 // Default state
 const defaultFilters: GraphFilters = {
@@ -71,6 +73,7 @@ const initialState: GraphState = {
   selectedNode: null,
   dimensions: { width: window.innerWidth, height: window.innerHeight },
   layout: 'force',
+  orthogonalEdges: false,
 }
 
 // Reducer
@@ -128,6 +131,9 @@ function graphReducer(state: GraphState, action: GraphAction): GraphState {
       }
     case 'SET_LAYOUT':
       return { ...state, layout: action.payload }
+    
+    case 'TOGGLE_ORTHOGONAL_EDGES':
+      return { ...state, orthogonalEdges: !state.orthogonalEdges }
     
     default:
       return state

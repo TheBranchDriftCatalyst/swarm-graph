@@ -29,6 +29,11 @@ export const useGraphState = () => {
     dispatch({ type: 'SET_LAYOUT', payload: layout })
   }
 
+  // Orthogonal edges toggle
+  const toggleOrthogonalEdges = () => {
+    dispatch({ type: 'TOGGLE_ORTHOGONAL_EDGES' })
+  }
+
   // Window resize handler
   useEffect(() => {
     const handleResize = () => {
@@ -69,6 +74,7 @@ export const useGraphState = () => {
     selectedNode: state.selectedNode,
     dimensions: state.dimensions,
   layout: state.layout,
+    orthogonalEdges: state.orthogonalEdges,
     filters: state.filters,
 
     // Actions
@@ -77,6 +83,7 @@ export const useGraphState = () => {
     setSelectedNode,
     setDimensions,
   setLayout,
+    toggleOrthogonalEdges,
 
     // Helpers
     getNodeInfo,

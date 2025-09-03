@@ -24,9 +24,13 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
     hoveredNode,
     selectedNode,
     dimensions,
+    layout,
+    orthogonalEdges,
     setRawData,
     setHoveredNode,
     setSelectedNode,
+    setLayout,
+    toggleOrthogonalEdges,
     getNodeInfo,
   } = useGraphState()
 
@@ -146,6 +150,71 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
       )}
       <NodeDetails node={getNodeInfo(hoveredNode || selectedNode)} />
       <Title />
+      
+      {/* Layout Toggle Button */}
+      <button
+        style={{
+          position: 'fixed',
+          top: '20px',
+          right: filterPanelVisible ? '440px' : '20px',
+          padding: '12px 16px',
+          backgroundColor: layout === 'structured' ? 'rgba(0, 212, 255, 0.2)' : 'rgba(10, 14, 39, 0.95)',
+          border: layout === 'structured' ? '2px solid #00D4FF' : '2px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '12px',
+          color: layout === 'structured' ? '#00D4FF' : '#FFFFFF',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(0, 212, 255, 0.3)',
+          transition: 'all 0.3s ease',
+          zIndex: 1000,
+        }}
+        onClick={() => setLayout(layout === 'force' ? 'structured' : 'force')}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = layout === 'structured' ? 'rgba(0, 212, 255, 0.3)' : 'rgba(0, 212, 255, 0.1)'
+          e.currentTarget.style.transform = 'translateY(-1px)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = layout === 'structured' ? 'rgba(0, 212, 255, 0.2)' : 'rgba(10, 14, 39, 0.95)'
+          e.currentTarget.style.transform = 'translateY(0px)'
+        }}
+      >
+        {layout === 'force' ? '🔧 FORCE' : '📊 STRUCTURED'}
+      </button>
+
+      {/* Orthogonal Edges Toggle Button */}
+      <button
+        style={{
+          position: 'fixed',
+          top: '80px',
+          right: filterPanelVisible ? '440px' : '20px',
+          padding: '12px 16px',
+          backgroundColor: orthogonalEdges ? 'rgba(0, 212, 255, 0.2)' : 'rgba(10, 14, 39, 0.95)',
+          border: orthogonalEdges ? '2px solid #00D4FF' : '2px solid rgba(255, 255, 255, 0.2)',
+          borderRadius: '12px',
+          color: orthogonalEdges ? '#00D4FF' : '#FFFFFF',
+          cursor: 'pointer',
+          fontSize: '14px',
+          fontWeight: 'bold',
+          backdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(0, 212, 255, 0.3)',
+          transition: 'all 0.3s ease',
+          zIndex: 1000,
+        }}
+        onClick={toggleOrthogonalEdges}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = orthogonalEdges ? 'rgba(0, 212, 255, 0.3)' : 'rgba(0, 212, 255, 0.1)'
+          e.currentTarget.style.transform = 'translateY(-1px)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = orthogonalEdges ? 'rgba(0, 212, 255, 0.2)' : 'rgba(10, 14, 39, 0.95)'
+          e.currentTarget.style.transform = 'translateY(0px)'
+        }}
+      >
+        {orthogonalEdges ? '📐 ORTHOGONAL' : '📏 STRAIGHT'}
+      </button>
+      
       <FilterPanel 
         isVisible={filterPanelVisible}
         onToggle={() => setFilterPanelVisible(!filterPanelVisible)}

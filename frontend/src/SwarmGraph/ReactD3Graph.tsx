@@ -30,7 +30,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   const prevNodeCountRef = useRef<number>(0)
 
   // Initialize graph data and simulation
-  const { layout } = useGraphState()
+  const { layout, orthogonalEdges } = useGraphState()
 
   useEffect(() => {
   if (!data || !svgRef.current) { 
@@ -418,6 +418,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
               key={`${edge.src}-${edge.dst}-${index}`}
               data={edge}
               zoom={zoomScale}
+              orthogonal={orthogonalEdges}
               isDimmed={
                 Boolean(
                   hoveredNode &&

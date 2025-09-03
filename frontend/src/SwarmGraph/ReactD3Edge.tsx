@@ -7,6 +7,7 @@ import { getNodeDimensions } from './ReactD3Node'
 interface ReactD3EdgeProps {
   data: EdgeData
   zoom?: number
+  orthogonal?: boolean
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
@@ -130,9 +131,35 @@ const calculateEdgeEndpoints = (
   }
 }
 
+// Function to calculate orthogonal (right-angled) edge path
+const calculateOrthogonalPath = (
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+) => {
+  // Calculate midpoint for the bend
+  const dx = x2 - x1
+  const dy = y2 - y1
+  
+  // Choose whether to go horizontal-first or vertical-first based on which is longer
+  const goHorizontalFirst = Math.abs(dx) > Math.abs(dy)
+  
+  if (goHorizontalFirst) {
+    // Go horizontal first, then vertical
+    const midX = x1 + dx * 0.7 // 70% of the way horizontal
+    return `M ${x1} ${y1} L ${midX} ${y1} L ${midX} ${y2} L ${x2} ${y2}`
+  } else {
+    // Go vertical first, then horizontal
+    const midY = y1 + dy * 0.7 // 70% of the way vertical
+    return `M ${x1} ${y1} L ${x1} ${midY} L ${x2} ${midY} L ${x2} ${y2}`
+  }
+}
+
 const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   data,
   zoom = 1,
+  orthogonal = false,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -221,6 +248,11 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
     zoom
   )
 
+  // Generate path based on mode
+  const edgePath = orthogonal 
+    ? calculateOrthogonalPath(edgePoints.x1, edgePoints.y1, edgePoints.x2, edgePoints.y2)
+    : null
+
   // Calculate midpoint for label positioning (use original centers for label)
   const midX = ((data.source.x || 0) + (data.target.x || 0)) / 2
   const midY = ((data.source.y || 0) + (data.target.y || 0)) / 2
@@ -230,20 +262,34 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
 
   return (
     <g className="edge-group">
-      {/* Edge line */}
-      <line
-        x1={edgePoints.x1}
-        y1={edgePoints.y1}
-        x2={edgePoints.x2}
-        y2={edgePoints.y2}
-        stroke={colors.edge[data.kind as EdgeKind]}
-        strokeWidth={2}
-        strokeOpacity={isDimmed ? 0.18 : 0.8}
-        style={{ cursor: onClick ? 'pointer' : 'default' }}
-        onClick={onClick}
-        onMouseEnter={onMouseEnter}
-        onMouseLeave={onMouseLeave}
-      />
+      {/* Edge line - either straight or orthogonal */}
+      {orthogonal ? (
+        <path
+          d={edgePath || ''}
+          stroke={colors.edge[data.kind as EdgeKind]}
+          strokeWidth={2}
+          strokeOpacity={isDimmed ? 0.18 : 0.8}
+          fill="none"
+          style={{ cursor: onClick ? 'pointer' : 'default' }}
+          onClick={onClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      ) : (
+        <line
+          x1={edgePoints.x1}
+          y1={edgePoints.y1}
+          x2={edgePoints.x2}
+          y2={edgePoints.y2}
+          stroke={colors.edge[data.kind as EdgeKind]}
+          strokeWidth={2}
+          strokeOpacity={isDimmed ? 0.18 : 0.8}
+          style={{ cursor: onClick ? 'pointer' : 'default' }}
+          onClick={onClick}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
+        />
+      )}
 
       {/* Label (only for meaningful connections) */}
       {showLabel && (
