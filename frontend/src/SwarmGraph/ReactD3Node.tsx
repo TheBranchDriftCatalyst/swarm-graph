@@ -3,7 +3,7 @@ import * as d3 from 'd3'
 import { colors, nodeIcons } from './SwarmGraphStyles'
 import { NodeData } from './interfaces'
 import { NodeKind } from '../types'
-import NodeTypeMap from './NodeTypes'
+import NodeTypeMap from './components'
 
 // TODO: we are going to have to extract the node type data differences here.
 // button for all nodes and individuals nodes.  We also want to define 
