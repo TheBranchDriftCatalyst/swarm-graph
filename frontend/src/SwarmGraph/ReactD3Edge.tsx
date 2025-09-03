@@ -8,13 +8,15 @@ interface ReactD3EdgeProps {
   data: EdgeData
   orthogonal?: boolean
   allNodes?: any[]
+  edgeIndex?: number
+  totalEdgesBetweenNodes?: number
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   isDimmed?: boolean
 }
 
-// Function to calculate edge endpoints that intersect with rectangular node boundaries
+// Function to calculate edge endpoints using 4-handle system (midpoints of each side)
 const calculateEdgeEndpoints = (
   sourceX: number, 
   sourceY: number, 
@@ -23,25 +25,7 @@ const calculateEdgeEndpoints = (
   sourceNode: any,
   targetNode: any
 ) => {
-  // Calculate the direction vector
-  const dx = targetX - sourceX
-  const dy = targetY - sourceY
-  const distance = Math.sqrt(dx * dx + dy * dy)
-  
-  if (distance === 0) {
-    return {
-      x1: sourceX,
-      y1: sourceY,
-      x2: targetX,
-      y2: targetY
-    }
-  }
-  
-  // Normalize the direction vector
-  const unitX = dx / distance
-  const unitY = dy / distance
-  
-  // Get actual node dimensions (no zoom scaling)
+  // Get actual node dimensions
   const sourceDimensions = getNodeDimensions(sourceNode)
   const targetDimensions = getNodeDimensions(targetNode)
   
@@ -50,81 +34,57 @@ const calculateEdgeEndpoints = (
   const targetWidth = targetDimensions.width
   const targetHeight = targetDimensions.height
   
-  // Function to find intersection with rectangular boundary
-  const findRectIntersection = (centerX: number, centerY: number, width: number, height: number, dirX: number, dirY: number) => {
+  // Function to get the 4 handles (midpoints of each side) for a node
+  const getNodeHandles = (centerX: number, centerY: number, width: number, height: number) => {
     const halfWidth = width / 2
     const halfHeight = height / 2
     
-    // Calculate intersection with each edge and find the closest valid one
-    const intersections = []
-    
-    // Right edge
-    if (dirX > 0) {
-      const t = halfWidth / dirX
-      const y = dirY * t
-      if (Math.abs(y) <= halfHeight) {
-        intersections.push({ x: centerX + halfWidth, y: centerY + y, t })
-      }
+    return {
+      top: { x: centerX, y: centerY - halfHeight },
+      bottom: { x: centerX, y: centerY + halfHeight },
+      left: { x: centerX - halfWidth, y: centerY },
+      right: { x: centerX + halfWidth, y: centerY }
     }
-    
-    // Left edge  
-    if (dirX < 0) {
-      const t = -halfWidth / dirX
-      const y = dirY * t
-      if (Math.abs(y) <= halfHeight) {
-        intersections.push({ x: centerX - halfWidth, y: centerY + y, t })
-      }
-    }
-    
-    // Bottom edge
-    if (dirY > 0) {
-      const t = halfHeight / dirY
-      const x = dirX * t
-      if (Math.abs(x) <= halfWidth) {
-        intersections.push({ x: centerX + x, y: centerY + halfHeight, t })
-      }
-    }
-    
-    // Top edge
-    if (dirY < 0) {
-      const t = -halfHeight / dirY
-      const x = dirX * t
-      if (Math.abs(x) <= halfWidth) {
-        intersections.push({ x: centerX + x, y: centerY - halfHeight, t })
-      }
-    }
-    
-    // Return the intersection with smallest positive t (closest to center in the direction)
-    const validIntersections = intersections.filter(int => int.t > 0)
-    if (validIntersections.length === 0) {
-      return { x: centerX, y: centerY }
-    }
-    
-    const closest = validIntersections.reduce((min, current) => 
-      current.t < min.t ? current : min
-    )
-    
-    return { x: closest.x, y: closest.y }
   }
   
-  // Calculate intersection points for both nodes using scaled dimensions
-  const sourceIntersection = findRectIntersection(
-    sourceX, sourceY, 
-    sourceWidth, sourceHeight, 
-    unitX, unitY
-  )
+  // Function to find the closest handle to a target point
+  const findClosestHandle = (handles: any, targetX: number, targetY: number) => {
+    let closestHandle = handles.top
+    let minDistance = Math.sqrt((handles.top.x - targetX) ** 2 + (handles.top.y - targetY) ** 2)
+    
+    const handleEntries = [
+      { side: 'top', handle: handles.top },
+      { side: 'bottom', handle: handles.bottom },
+      { side: 'left', handle: handles.left },
+      { side: 'right', handle: handles.right }
+    ]
+    
+    for (const { handle } of handleEntries) {
+      const distance = Math.sqrt((handle.x - targetX) ** 2 + (handle.y - targetY) ** 2)
+      if (distance < minDistance) {
+        minDistance = distance
+        closestHandle = handle
+      }
+    }
+    
+    return closestHandle
+  }
   
-  const targetIntersection = findRectIntersection(
-    targetX, targetY, 
-    targetWidth, targetHeight, 
-    -unitX, -unitY  // Reverse direction for target
-  )
+  // Get handles for both nodes
+  const sourceHandles = getNodeHandles(sourceX, sourceY, sourceWidth, sourceHeight)
+  const targetHandles = getNodeHandles(targetX, targetY, targetWidth, targetHeight)
+  
+  // Find the closest handle on source node to target center
+  const sourceHandle = findClosestHandle(sourceHandles, targetX, targetY)
+  
+  // Find the closest handle on target node to source center
+  const targetHandle = findClosestHandle(targetHandles, sourceX, sourceY)
   
   return { 
-    x1: sourceIntersection.x, 
-    y1: sourceIntersection.y, 
-    x2: targetIntersection.x, 
-    y2: targetIntersection.y 
+    x1: sourceHandle.x, 
+    y1: sourceHandle.y, 
+    x2: targetHandle.x, 
+    y2: targetHandle.y 
   }
 }
 
@@ -136,17 +96,25 @@ const calculateOrthogonalPath = (
   y2: number,
   sourceNode: any,
   targetNode: any,
-  allNodes: any[] = []
+  allNodes: any[] = [],
+  edgeIndex: number = 0,
+  totalEdgesBetweenNodes: number = 1
 ) => {
   const dx = x2 - x1
   const dy = y2 - y1
   
-  // Helper function to check if a point is inside a node's bounds
+  // Calculate tight spacing for multiple edges between same nodes
+  const edgeSpacing = 15 // Reduced from default offsets
+  const offsetMultiplier = Math.floor(edgeIndex / 2) + 1
+  const isEvenIndex = edgeIndex % 2 === 0
+  const offsetDirection = isEvenIndex ? 1 : -1
+  const baseOffset = offsetMultiplier * edgeSpacing * offsetDirection
+  
+  // Helper function to check if a point is inside a node's bounds (tighter bounds)
   const isPointInNode = (px: number, py: number, node: any) => {
     if (!node || node.id === sourceNode.id || node.id === targetNode.id) {
       return false
     }
-
     
     const nodeDims = getNodeDimensions(node)
     const { width, height } = nodeDims
@@ -155,16 +123,16 @@ const calculateOrthogonalPath = (
     const nodeY = node.y || 0
     
     return (
-      px >= nodeX - width/2 - 10 && // 10px padding
-      px <= nodeX + width/2 + 10 &&
-      py >= nodeY - height/2 - 10 &&
-      py <= nodeY + height/2 + 10
+      px >= nodeX - width/2 - 8 && // Reduced padding for tighter routing
+      px <= nodeX + width/2 + 8 &&
+      py >= nodeY - height/2 - 8 &&
+      py <= nodeY + height/2 + 8
     )
   }
   
   // Helper function to check if a line segment intersects any nodes
   const lineIntersectsNodes = (sx: number, sy: number, ex: number, ey: number) => {
-    const steps = 20 // Check 20 points along the line
+    const steps = 15 // Reduced steps for faster calculation
     for (let i = 0; i <= steps; i++) {
       const t = i / steps
       const px = sx + (ex - sx) * t
@@ -179,11 +147,11 @@ const calculateOrthogonalPath = (
     return false
   }
   
-  // Calculate different routing options
+  // Calculate different routing options with edge spacing
   const routes = []
   
-  // Option 1: Horizontal-first direct
-  const hMidX = x1 + dx * 0.7
+  // Option 1: Horizontal-first direct with offset
+  const hMidX = x1 + dx * 0.7 + baseOffset * 0.3
   if (!lineIntersectsNodes(x1, y1, hMidX, y1) && 
       !lineIntersectsNodes(hMidX, y1, hMidX, y2) && 
       !lineIntersectsNodes(hMidX, y2, x2, y2)) {
@@ -193,8 +161,8 @@ const calculateOrthogonalPath = (
     })
   }
   
-  // Option 2: Vertical-first direct
-  const vMidY = y1 + dy * 0.7
+  // Option 2: Vertical-first direct with offset
+  const vMidY = y1 + dy * 0.7 + baseOffset * 0.3
   if (!lineIntersectsNodes(x1, y1, x1, vMidY) && 
       !lineIntersectsNodes(x1, vMidY, x2, vMidY) && 
       !lineIntersectsNodes(x2, vMidY, x2, y2)) {
@@ -204,9 +172,9 @@ const calculateOrthogonalPath = (
     })
   }
   
-  // Option 3: Two-bend horizontal route (go around obstacles)
+  // Option 3: Compact horizontal detour (reduced from 80 to 40)
   const hMidX2 = x1 + dx * 0.5
-  const offsetY = dy > 0 ? Math.max(80, Math.abs(dy) * 0.3) : -Math.max(80, Math.abs(dy) * 0.3)
+  const offsetY = dy > 0 ? Math.max(40, Math.abs(dy) * 0.2) + baseOffset : -Math.max(40, Math.abs(dy) * 0.2) + baseOffset
   const routeY = y1 + offsetY
   
   if (!lineIntersectsNodes(x1, y1, hMidX2, y1) && 
@@ -219,9 +187,9 @@ const calculateOrthogonalPath = (
     })
   }
   
-  // Option 4: Two-bend vertical route
+  // Option 4: Compact vertical detour (reduced from 80 to 40)
   const vMidY2 = y1 + dy * 0.5
-  const offsetX = dx > 0 ? Math.max(80, Math.abs(dx) * 0.3) : -Math.max(80, Math.abs(dx) * 0.3)
+  const offsetX = dx > 0 ? Math.max(40, Math.abs(dx) * 0.2) + baseOffset : -Math.max(40, Math.abs(dx) * 0.2) + baseOffset
   const routeX = x1 + offsetX
   
   if (!lineIntersectsNodes(x1, y1, x1, vMidY2) && 
@@ -234,19 +202,19 @@ const calculateOrthogonalPath = (
     })
   }
   
-  // Option 5: Fallback - wide detour routes
-  const wideOffsetY = dy > 0 ? 120 : -120
-  const wideOffsetX = dx > 0 ? 120 : -120
+  // Option 5: Fallback - tight detour routes (reduced from 120 to 60)
+  const tightOffsetY = dy > 0 ? 60 + Math.abs(baseOffset) : -60 - Math.abs(baseOffset)
+  const tightOffsetX = dx > 0 ? 60 + Math.abs(baseOffset) : -60 - Math.abs(baseOffset)
   
-  // Wide horizontal detour
+  // Tight horizontal detour
   routes.push({
-    path: `M ${x1} ${y1} L ${x1} ${y1 + wideOffsetY} L ${x2} ${y1 + wideOffsetY} L ${x2} ${y2}`,
+    path: `M ${x1} ${y1} L ${x1} ${y1 + tightOffsetY} L ${x2} ${y1 + tightOffsetY} L ${x2} ${y2}`,
     priority: 4
   })
   
-  // Wide vertical detour
+  // Tight vertical detour
   routes.push({
-    path: `M ${x1} ${y1} L ${x1 + wideOffsetX} ${y1} L ${x1 + wideOffsetX} ${y2} L ${x2} ${y2}`,
+    path: `M ${x1} ${y1} L ${x1 + tightOffsetX} ${y1} L ${x1 + tightOffsetX} ${y2} L ${x2} ${y2}`,
     priority: 4
   })
   
@@ -256,10 +224,65 @@ const calculateOrthogonalPath = (
   return routes.length > 0 ? routes[0].path : `M ${x1} ${y1} L ${x2} ${y2}` // Fallback to straight line
 }
 
+// Function to calculate the midpoint of an orthogonal path for label positioning
+const getOrthogonalPathMidpoint = (pathString: string) => {
+  // Parse the path string to extract coordinates
+  const commands = pathString.match(/[MLZ][^MLZ]*/g) || []
+  const points = []
+  
+  for (const command of commands) {
+    const coords = command.slice(1).trim().split(/\s+/)
+    if (coords.length >= 2) {
+      points.push({
+        x: parseFloat(coords[0]),
+        y: parseFloat(coords[1])
+      })
+    }
+  }
+  
+  if (points.length < 2) {
+    return { x: 0, y: 0 }
+  }
+  
+  // Calculate total path length
+  let totalLength = 0
+  const segments = []
+  
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i-1].x
+    const dy = points[i].y - points[i-1].y
+    const length = Math.sqrt(dx * dx + dy * dy)
+    segments.push({ length, start: points[i-1], end: points[i] })
+    totalLength += length
+  }
+  
+  // Find the point at 50% of the path length
+  const targetLength = totalLength / 2
+  let currentLength = 0
+  
+  for (const segment of segments) {
+    if (currentLength + segment.length >= targetLength) {
+      // The midpoint is in this segment
+      const ratio = (targetLength - currentLength) / segment.length
+      return {
+        x: segment.start.x + (segment.end.x - segment.start.x) * ratio,
+        y: segment.start.y + (segment.end.y - segment.start.y) * ratio
+      }
+    }
+    currentLength += segment.length
+  }
+  
+  // Fallback to geometric center
+  const centerIndex = Math.floor(points.length / 2)
+  return points[centerIndex]
+}
+
 const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   data,
   orthogonal = false,
   allNodes = [],
+  edgeIndex = 0,
+  totalEdgesBetweenNodes = 1,
   onClick,
   onMouseEnter,
   onMouseLeave,
@@ -356,13 +379,25 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
         edgePoints.y2,
         data.source,
         data.target,
-        allNodes
+        allNodes,
+        edgeIndex,
+        totalEdgesBetweenNodes
       )
     : null
 
-  // Calculate midpoint for label positioning (use original centers for label)
-  const midX = ((data.source.x || 0) + (data.target.x || 0)) / 2
-  const midY = ((data.source.y || 0) + (data.target.y || 0)) / 2
+  // Calculate midpoint for label positioning
+  let midX, midY
+  
+  if (orthogonal && edgePath) {
+    // Use the actual path midpoint for orthogonal edges
+    const pathMidpoint = getOrthogonalPathMidpoint(edgePath)
+    midX = pathMidpoint.x
+    midY = pathMidpoint.y
+  } else {
+    // Use diagonal midpoint for straight edges
+    midX = ((data.source.x || 0) + (data.target.x || 0)) / 2
+    midY = ((data.source.y || 0) + (data.target.y || 0)) / 2
+  }
 
   // Calculate dynamic label background width
   const textWidth = labelText ? labelText.length * 6 + 8 : 50

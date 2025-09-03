@@ -413,23 +413,36 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
       <g ref={zoomLayerRef} className="zoom-layer">
         {/* Edges */}
         <g className="edges">
-          {edges.map((edge, index) => (
-            <ReactD3Edge
-              key={`${edge.src}-${edge.dst}-${index}`}
-              data={edge}
-              orthogonal={orthogonalEdges}
-              allNodes={nodes}
-              isDimmed={
-                Boolean(
-                  hoveredNode &&
-                    hoveredNode !== edge.source.id &&
-                    hoveredNode !== edge.target.id &&
-                    selectedNode !== edge.source.id &&
-                    selectedNode !== edge.target.id
-                )
-              }
-            />
-          ))}
+          {edges.map((edge, index) => {
+            // Calculate edge index among edges between the same nodes
+            const edgesBetweenNodes = edges.filter(e => 
+              (e.source.id === edge.source.id && e.target.id === edge.target.id) ||
+              (e.source.id === edge.target.id && e.target.id === edge.source.id)
+            )
+            const edgeIndex = edgesBetweenNodes.findIndex(e => 
+              e.src === edge.src && e.dst === edge.dst
+            )
+            
+            return (
+              <ReactD3Edge
+                key={`${edge.src}-${edge.dst}-${index}`}
+                data={edge}
+                orthogonal={orthogonalEdges}
+                allNodes={nodes}
+                edgeIndex={edgeIndex}
+                totalEdgesBetweenNodes={edgesBetweenNodes.length}
+                isDimmed={
+                  Boolean(
+                    hoveredNode &&
+                      hoveredNode !== edge.source.id &&
+                      hoveredNode !== edge.target.id &&
+                      selectedNode !== edge.source.id &&
+                      selectedNode !== edge.target.id
+                  )
+                }
+              />
+            )
+          })}
         </g>
 
         {/* Nodes */}
