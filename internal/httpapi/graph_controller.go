@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"swarm-graph/internal/mermaid"
 	"swarm-graph/internal/store"
@@ -29,7 +30,33 @@ func NewGraphController(store *store.MemoryStore, logger *slog.Logger, opts Opti
 // MermaidHandler returns raw Mermaid source
 func (gc *GraphController) MermaidHandler(w http.ResponseWriter, r *http.Request) {
 	g := gc.store.Snapshot()
-	txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, gc.logger)
+	// Parse filtering query params
+	opts := mermaid.DefaultOptions()
+	q := r.URL.Query()
+	if s := strings.TrimSpace(q.Get("stack")); s != "" {
+		opts.FilterStack = s
+	}
+	if q.Get("exclude_orphans") == "1" || strings.ToLower(q.Get("exclude_orphans")) == "true" {
+		opts.ExcludeOrphans = true
+	}
+	if kinds := strings.TrimSpace(q.Get("kinds")); kinds != "" {
+		// comma-separated list of kinds (container,image,network,volume)
+		for _, k := range strings.Split(kinds, ",") {
+			kk := strings.TrimSpace(k)
+			switch kk {
+			case "container":
+				opts.FilterKinds = append(opts.FilterKinds, mermaid.NodeContainer)
+			case "image":
+				opts.FilterKinds = append(opts.FilterKinds, mermaid.NodeImage)
+			case "network":
+				opts.FilterKinds = append(opts.FilterKinds, mermaid.NodeNetwork)
+			case "volume":
+				opts.FilterKinds = append(opts.FilterKinds, mermaid.NodeVolume)
+			}
+		}
+	}
+
+	txt, err := mermaid.RenderToString(g, opts, nil, nil, gc.logger)
 	if err != nil {
 		httpError(gc.logger, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
 		return

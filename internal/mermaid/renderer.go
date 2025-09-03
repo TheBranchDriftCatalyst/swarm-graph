@@ -136,6 +136,21 @@ type RenderOptions struct {
 	// will be injected into node labels when available. The renderer will attempt
 	// to derive the short repo name from node.Attributes["image"].
 	VendorLogos map[string]string
+
+	// Filtering options applied before rendering. These allow callers to
+	// restrict which nodes/edges are included in the output. They are
+	// intentionally simple and implemented server-side so the UI can request
+	// pre-filtered diagrams via query params.
+	// FilterStack, if non-empty, will include only nodes with
+	// Attributes["stack"] == FilterStack.
+	FilterStack string
+
+	// ExcludeOrphans removes any nodes that have zero incident edges after
+	// all other filters are applied.
+	ExcludeOrphans bool
+
+	// FilterKinds, when non-empty, restricts nodes to the provided kinds.
+	FilterKinds []NodeKind
 }
 
 // ===== Public API =====
@@ -177,6 +192,84 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 		}
 		return edges[i].Kind < edges[j].Kind
 	})
+
+	// Apply filters (if any) to produce a view of nodes/edges we'll render.
+	if opts.FilterStack != "" || opts.ExcludeOrphans || len(opts.FilterKinds) > 0 {
+		m.Debug("applying render filters", "stack", opts.FilterStack, "exclude_orphans", opts.ExcludeOrphans, "kinds", opts.FilterKinds)
+		// Build a set of allowed kinds if provided
+		allowedKinds := map[NodeKind]struct{}{}
+		if len(opts.FilterKinds) > 0 {
+			for _, k := range opts.FilterKinds {
+				allowedKinds[k] = struct{}{}
+			}
+		}
+
+		// Filter nodes by stack and kinds
+		filtered := make(map[string]Node, 0)
+		for id, n := range nodes {
+			if opts.FilterStack != "" {
+				if n.Attributes == nil || n.Attributes["stack"] != opts.FilterStack {
+					continue
+				}
+			}
+			if len(allowedKinds) > 0 {
+				if _, ok := allowedKinds[n.Kind]; !ok {
+					continue
+				}
+			}
+			filtered[id] = n
+		}
+
+		// Filter edges to those connecting allowed nodes
+		newEdges := make([]Edge, 0, len(edges))
+		for _, e := range edges {
+			if _, ok := filtered[e.Src]; !ok {
+				continue
+			}
+			if _, ok := filtered[e.Dst]; !ok {
+				continue
+			}
+			newEdges = append(newEdges, e)
+		}
+
+		// Optionally exclude orphans: nodes with zero incident edges
+		if opts.ExcludeOrphans {
+			incident := map[string]int{}
+			for _, e := range newEdges {
+				incident[e.Src]++
+				incident[e.Dst]++
+			}
+			for id := range filtered {
+				if incident[id] == 0 {
+					delete(filtered, id)
+				}
+			}
+
+			// Re-filter edges to remaining nodes
+			tmp := newEdges[:0]
+			for _, e := range newEdges {
+				if _, ok := filtered[e.Src]; !ok {
+					continue
+				}
+				if _, ok := filtered[e.Dst]; !ok {
+					continue
+				}
+				tmp = append(tmp, e)
+			}
+			newEdges = tmp
+		}
+
+		// Replace nodes/edges for rendering
+		nodes = filtered
+		edges = newEdges
+
+		// Recompute sorted nodeIDs deterministic order
+		nodeIDs = nodeIDs[:0]
+		for id := range nodes {
+			nodeIDs = append(nodeIDs, id)
+		}
+		sort.Strings(nodeIDs)
+	}
 
 	// Prepare Mermaid
 	dir := strings.ToUpper(strings.TrimSpace(opts.Direction))
@@ -346,7 +439,7 @@ func Render(w io.Writer, g InfraGraph, opts RenderOptions, nf NodeFormatter, ef 
 	}
 
 	// Legend (optional)
-	if opts.IncludeLegend || true {
+	if opts.IncludeLegend {
 		buf.WriteString("\n  %% Legend\n")
 		buf.WriteString("  subgraph \"Legend\"\n")
 		buf.WriteString("    classDef container fill:#0a0e27,stroke:#3a86ff,stroke-width:2px,color:#bfe3ff;\n")
@@ -393,7 +486,7 @@ func DefaultOptions() RenderOptions {
 		Direction:     "LR",
 		ShowNodeIDs:   false,
 		MaxLabelRunes: 48,
-		IncludeLegend: true,
+		IncludeLegend: false,
 	}
 }
 
@@ -427,52 +520,7 @@ func writeDefaultClassDefs(buf *bytes.Buffer, opts RenderOptions) {
 	buf.WriteString("  classDef volume    fill:#0a0e27,stroke:#ffbe0b,stroke-width:2px,color:#fff3c4;\n")
 }
 
-func writeNodeLine(buf *bytes.Buffer, n Node, mid string, nf NodeFormatter, opts RenderOptions) {
-	label := n.Name
-	if nf != nil {
-		l, _ := nf.FormatNode(n)
-		if l != "" {
-			label = l
-		}
-	}
-	if label == "" {
-		label = ShortID(n.ID)
-	}
-	if opts.ShowNodeIDs && !strings.Contains(label, ShortID(n.ID)) {
-		label = label + " • " + ShortID(n.ID)
-	}
-
-	// vendor logo prefix
-	var logoPrefix string
-	if opts.VendorLogos != nil {
-		if imgRef := n.Attributes["image"]; imgRef != "" {
-			// derive key: last path element before tag/sha
-			parts := strings.Split(imgRef, "/")
-			last := parts[len(parts)-1]
-			key := strings.Split(last, ":")[0]
-			if url, ok := opts.VendorLogos[key]; ok {
-				// escape URL then include as small img tag
-				logoPrefix = fmt.Sprintf("<img src=\"%s\" width=\"18\" height=\"18\" /> ", esc(url))
-			}
-		}
-	}
-
-	textLabel := label
-	if opts.MaxLabelRunes > 0 {
-		textLabel = truncateRunes(textLabel, opts.MaxLabelRunes)
-	}
-	textLabel = esc(textLabel)
-	full := logoPrefix + textLabel
-	fmt.Fprintf(buf, "  %s[\"%s\"]\n", mid, full)
-	// Assign class by kind
-	kind := strings.ToLower(string(n.Kind))
-	switch n.Kind {
-	case NodeContainer, NodeNetwork, NodeImage, NodeVolume:
-		fmt.Fprintf(buf, "  class %s %s;\n", mid, kind)
-	default:
-		// Unknown kinds will remain unstyled
-	}
-}
+// ... existing helpers follow
 
 // Prefer Name; fall back to short id.
 func shortPreferName(n Node) string {

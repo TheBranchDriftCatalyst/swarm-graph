@@ -92,8 +92,33 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 func serveRendered(w http.ResponseWriter, r *http.Request, st *store.MemoryStore, opts Options, log *slog.Logger, format, ctype string) {
 	ctx := r.Context()
 
+	// Snapshot and apply filters from query params
 	g := st.Snapshot()
-	txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
+	mopts := mermaid.DefaultOptions()
+	q := r.URL.Query()
+	if s := strings.TrimSpace(q.Get("stack")); s != "" {
+		mopts.FilterStack = s
+	}
+	if q.Get("exclude_orphans") == "1" || strings.ToLower(q.Get("exclude_orphans")) == "true" {
+		mopts.ExcludeOrphans = true
+	}
+	if kinds := strings.TrimSpace(q.Get("kinds")); kinds != "" {
+		for _, k := range strings.Split(kinds, ",") {
+			kk := strings.TrimSpace(k)
+			switch kk {
+			case "container":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeContainer)
+			case "image":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeImage)
+			case "network":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeNetwork)
+			case "volume":
+				mopts.FilterKinds = append(mopts.FilterKinds, mermaid.NodeVolume)
+			}
+		}
+	}
+
+	txt, err := mermaid.RenderToString(g, mopts, nil, nil, log)
 	if err != nil {
 		httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
 		return
