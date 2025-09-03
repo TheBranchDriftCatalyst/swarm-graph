@@ -3,9 +3,7 @@ package httpapi
 import (
 	"context"
 	"crypto/sha256"
-	"embed"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,12 +11,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"text/template"
-	"time"
-
 	"swarm-graph/internal/mermaid"
 	"swarm-graph/internal/store"
-	"swarm-graph/internal/utils"
+	"text/template"
+	"time"
 )
 
 /*
@@ -31,8 +27,9 @@ import (
      GET /health      -> "ok"
 */
 
-//go:embed assets/*
-var uiFS embed.FS
+// We serve frontend static files directly from the frontend/dist directory during
+// development. go:embed cannot reach outside the package with ../ paths, so
+// prefer http.Dir at runtime. In production you may want to embed the files.
 
 type Options struct {
 	Logger   *slog.Logger
@@ -54,109 +51,28 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	}
 	log := opts.Logger.With("component", "httpapi")
 
-	mux := http.NewServeMux()
+	// Create router with middleware support
+	router := NewRouter(log)
 
-	// Raw Mermaid source
-	mux.HandleFunc("/graph.mmd", func(w http.ResponseWriter, r *http.Request) {
-		g := st.Snapshot()
-		txt, err := mermaid.RenderToString(g, mermaid.DefaultOptions(), nil, nil, log)
-		if err != nil {
-			httpError(log, w, r, http.StatusInternalServerError, "render mermaid: %v", err)
-			return
-		}
-		etag := etagFor(txt)
-		if checkIfNoneMatch(w, r, etag) {
-			return
-		}
-		setCommonHeaders(w, "text/plain; charset=utf-8", etag, opts.CacheMaxAge)
-		_, _ = io.WriteString(w, txt)
-	})
+	// Initialize controllers
+	graphController := NewGraphController(st, log, opts)
+	dockerController := NewDockerController(st, log)
+	healthController := NewHealthController(log)
 
-	// Graph JSON
-	mux.HandleFunc("/graph.json", func(w http.ResponseWriter, r *http.Request) {
-		snap := st.Snapshot()
-		setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
-		enc := json.NewEncoder(w)
-		enc.SetIndent("", "  ")
-		_ = enc.Encode(snap)
-	})
+	// Register routes
+	router.HandleFunc("/graph.mmd", graphController.MermaidHandler)
+	router.HandleFunc("/graph.json", graphController.JSONHandler)
+	router.HandleFunc("/graph.svg", graphController.SVGHandler)
+	router.HandleFunc("/graph.png", graphController.PNGHandler)
+	router.HandleFunc("/docker/inspect", dockerController.InspectHandler)
+	router.HandleFunc("/health", healthController.HealthHandler)
 
-	// Server-side Mermaid → SVG/PNG via Kroki
-	mux.HandleFunc("/graph.svg", func(w http.ResponseWriter, r *http.Request) {
-		serveRendered(w, r, st, opts, log, "svg", "image/svg+xml")
-	})
-	mux.HandleFunc("/graph.png", func(w http.ResponseWriter, r *http.Request) {
-		serveRendered(w, r, st, opts, log, "png", "image/png")
-	})
+	// Static assets
+	// router.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(uiFS))))
 
-	// Health
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		setCommonHeaders(w, "text/plain; charset=utf-8", "", 0)
-		_, _ = io.WriteString(w, "ok")
-	})
-
-	// Docker inspect proxy: returns inspect data using Docker API
-	// Query param: id=<container-or-task-id>
-	mux.HandleFunc("/docker/inspect", func(w http.ResponseWriter, r *http.Request) {
-		id := strings.TrimSpace(r.URL.Query().Get("id"))
-		if id == "" {
-			httpError(log, w, r, http.StatusBadRequest, "missing id param")
-			return
-		}
-
-		// Create Docker client
-		dockerClient, err := utils.NewDockerClient(log)
-		if err != nil {
-			httpError(log, w, r, http.StatusInternalServerError, "failed to create docker client: %v", err)
-			return
-		}
-		defer dockerClient.Close()
-
-		// Short timeout for docker API calls
-		ctx := r.Context()
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		// Try to inspect the resource
-		data, err := dockerClient.InspectAny(ctx, id)
-		if err != nil {
-			// Log warning and return a 500 with error message for easier debugging
-			log.Warn("docker inspect failed", "id", id, "err", err.Error())
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			http.Error(w, fmt.Sprintf("docker inspect error: %s", err.Error()), http.StatusInternalServerError)
-			return
-		}
-
-		// Return the JSON from docker inspect
-		setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
-		_, _ = w.Write(data)
-	})
-
-	// Optional: static UI at /assets/
-	mux.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(uiFS))))
-
-	// Wrap with a tiny access log and simple CORS middleware
+	// Apply CORS and access logging middleware to entire API
 	corsOrigin := envOr("CORS_ORIGIN", "*")
-	return accessLog(log, corsMiddleware(mux, corsOrigin))
-}
-
-// corsMiddleware sets basic CORS headers and handles OPTIONS preflight.
-// The origin parameter may be '*' or a specific origin like 'http://localhost:5173'.
-func corsMiddleware(next http.Handler, origin string) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow the configured origin. In production you may want to restrict this.
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Vary", "Origin")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization")
-
-		if r.Method == http.MethodOptions {
-			// Preflight request - no body
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	return router.Handler(corsOrigin)
 }
 
 /* ---------- helpers ---------- */
@@ -280,31 +196,6 @@ func checkIfNoneMatch(w http.ResponseWriter, r *http.Request, etag string) bool 
 func httpError(log *slog.Logger, w http.ResponseWriter, r *http.Request, code int, msg string, args ...any) {
 	log.Warn("http error", "path", r.URL.Path, "code", code, "err", fmt.Sprintf(msg, args...))
 	http.Error(w, http.StatusText(code), code)
-}
-
-func accessLog(log *slog.Logger, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := &wr{ResponseWriter: w, status: 200}
-		next.ServeHTTP(ww, r)
-		log.Info("access",
-			"method", r.Method,
-			"path", r.URL.Path,
-			"status", ww.status,
-			"dur_ms", time.Since(start).Milliseconds(),
-			"ua", r.UserAgent(),
-		)
-	})
-}
-
-type wr struct {
-	http.ResponseWriter
-	status int
-}
-
-func (w *wr) WriteHeader(code int) {
-	w.status = code
-	w.ResponseWriter.WriteHeader(code)
 }
 
 func envOr(k, def string) string {

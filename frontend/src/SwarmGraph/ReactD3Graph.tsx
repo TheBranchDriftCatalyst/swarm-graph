@@ -5,6 +5,7 @@ import ReactD3Edge from './ReactD3Edge'
 import { colors } from './SwarmGraphStyles'
 import { NodeKind, EdgeKind } from '../types'
 import { NodeData, EdgeData, ReactD3GraphProps } from './interfaces'
+import { enrichGraph, NodeWithHelpers, EdgeWithHelpers } from './utils/GraphNavigator'
 import { Logger } from '../utils'
 
 const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
@@ -19,10 +20,10 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
 }) => {
   const svgRef = useRef<SVGSVGElement>(null)
   const zoomLayerRef = useRef<SVGGElement>(null)
-  const [nodes, setNodes] = useState<NodeData[]>([])
-  const [edges, setEdges] = useState<EdgeData[]>([])
+  const [nodes, setNodes] = useState<NodeWithHelpers[] | NodeData[]>([])
+  const [edges, setEdges] = useState<EdgeWithHelpers[] | EdgeData[]>([])
   const [zoomScale, setZoomScale] = useState<number>(1)
-  const simulationRef = useRef<d3.Simulation<NodeData, undefined> | null>(null)
+  const simulationRef = useRef<d3.Simulation<any, undefined> | null>(null)
 
   // Initialize graph data and simulation
   useEffect(() => {
@@ -31,27 +32,17 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     }
 
     const { width, height } = dimensions
+    // Enrich graph data with navigation helpers and then filter
+    const enriched = enrichGraph(data)
 
-    // Filter nodes and edges based on visibility
-    const rawNodes = Object.values(data.nodes) as NodeData[]
-    const filteredNodes = rawNodes.filter((n) => visibleNodes[n.kind])
+    // Convert enriched map into arrays and apply visibility filters
+    const allNodes = Object.values(enriched.nodes) as NodeWithHelpers[]
+    const filteredNodes = allNodes.filter((n) => visibleNodes[n.kind])
 
-    const rawLinks = data.edges as any[]
-    const nodeMap: Record<string, NodeData> = {}
-    filteredNodes.forEach((n) => {
-      nodeMap[n.id] = n
-    })
-
-    const filteredLinks = rawLinks
-      .filter(
-        (l: any) =>
-          visibleEdges[l.kind as EdgeKind] && nodeMap[l.src] && nodeMap[l.dst]
-      )
-      .map((l: any) => ({
-        ...l,
-        source: nodeMap[l.src],
-        target: nodeMap[l.dst],
-      }))
+    const rawLinks = enriched.edges as EdgeWithHelpers[]
+    const filteredLinks = rawLinks.filter(
+      (l) => visibleEdges[l.kind as EdgeKind] && l.source && l.target
+    )
 
     // Apply Dagre layout for initial positioning
     try {
