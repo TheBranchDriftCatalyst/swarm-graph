@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/docker/docker/api/types"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/volume"
 	"github.com/docker/docker/client"
 )
@@ -72,7 +71,7 @@ func (dc *DockerClient) InspectImage(ctx context.Context, imageID string) ([]byt
 
 // InspectNetwork inspects a network by ID and returns the inspection data as JSON
 func (dc *DockerClient) InspectNetwork(ctx context.Context, networkID string) ([]byte, error) {
-	inspect, err := dc.client.NetworkInspect(ctx, networkID, network.InspectOptions{})
+	inspect, err := dc.client.NetworkInspect(ctx, networkID, types.NetworkInspectOptions{})
 	if err != nil {
 		dc.logger.Warn("network inspect failed", "id", networkID, "err", err.Error())
 		return nil, fmt.Errorf("network inspect failed: %w", err)
