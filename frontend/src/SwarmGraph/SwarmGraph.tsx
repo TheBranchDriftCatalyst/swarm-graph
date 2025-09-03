@@ -136,12 +136,14 @@ const SwarmGraphInner: React.FC<{ data: any }> = ({ data }) => {
         hoveredNode={hoveredNode}
         selectedNode={selectedNode}
       />
-      <Legend
-        visibleNodes={filters.visibleNodes}
-        setVisibleNodes={setVisibleNodes}
-        visibleEdges={filters.visibleEdges}
-        setVisibleEdges={setVisibleEdges}
-      />
+      {!filterPanelVisible && (
+        <Legend
+          visibleNodes={filters.visibleNodes}
+          setVisibleNodes={setVisibleNodes}
+          visibleEdges={filters.visibleEdges}
+          setVisibleEdges={setVisibleEdges}
+        />
+      )}
       <NodeDetails node={getNodeInfo(hoveredNode || selectedNode)} />
       <Title />
       <FilterPanel 
