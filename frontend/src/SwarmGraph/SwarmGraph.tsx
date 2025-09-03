@@ -1,17 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react'
-import * as d3 from 'd3'
-import { GraphNode, NodeKind, EdgeKind } from './types'
+import React, { useState } from 'react'
+import { GraphNode, NodeKind, EdgeKind } from '../types'
 import { styles } from './SwarmGraphStyles'
 import Legend from './Legend'
 import NodeDetails from './NodeDetails'
 import Title from './Title'
-import { initGraph } from './D3Graph'
-
-// TODO: afgter two or so interactions the nodes no longer become draggable for some reason
-// hover works 
+import ReactD3Graph from './ReactD3Graph'
 
 const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
-  const svgRef = useRef<SVGSVGElement>(null)
   const [dimensions, setDimensions] = useState({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -31,35 +26,22 @@ const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
     mounted_into: true,
   })
 
-  // Resize
-  useEffect(() => {
+  // Resize handler
+  React.useEffect(() => {
     const onResize = () =>
       setDimensions({ width: window.innerWidth, height: window.innerHeight })
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  // Graph init
-  useEffect(() => {
-    if (!data || !svgRef.current) return
-    const cleanup = initGraph({
-      data,
-      svgRef,
-      dimensions,
-      visibleNodes,
-      visibleEdges,
-      setHoveredNode,
-      setSelectedNode,
-      hoveredNode,
-      selectedNode,
-    })
-    return cleanup
-  }, [data, dimensions, visibleNodes, visibleEdges])
-
   // Lookup function
   const getNodeInfo = (nodeId: string): GraphNode | undefined => {
-    if (!data || !data.nodes) return undefined
-    if (data.nodes[nodeId]) return data.nodes[nodeId]
+    if (!data || !data.nodes) {
+      return undefined
+    }
+    if (data.nodes[nodeId]) {
+      return data.nodes[nodeId]
+    }
     return Object.values(data.nodes).find((n: any) =>
       [n.id, n.ID, n.Id, n.Name, n.name].some(
         (v) => String(v) === String(nodeId)
@@ -69,7 +51,16 @@ const SwarmGraph: React.FC<{ data: any }> = ({ data }) => {
 
   return (
     <div style={styles.container}>
-      <svg ref={svgRef} width={dimensions.width} height={dimensions.height} />
+      <ReactD3Graph
+        data={data}
+        dimensions={dimensions}
+        visibleNodes={visibleNodes}
+        visibleEdges={visibleEdges}
+        setHoveredNode={setHoveredNode}
+        setSelectedNode={setSelectedNode}
+        hoveredNode={hoveredNode}
+        selectedNode={selectedNode}
+      />
       <Legend
         {...{ visibleNodes, setVisibleNodes, visibleEdges, setVisibleEdges }}
       />
