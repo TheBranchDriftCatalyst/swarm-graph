@@ -60,7 +60,7 @@ const Legend: React.FC<LegendProps> = ({
                     marginRight: 6,
                   }}
                 >
-                  {nodeIcons[k]}
+                  {(nodeIcons as Record<NodeKind, React.ReactNode>)[k]}
                 </span>
                 <span style={{ opacity: on ? 1 : 0.7 }}>{k}</span>
               </div>

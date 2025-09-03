@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
 	"time"
@@ -114,6 +115,35 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		setCommonHeaders(w, "text/plain; charset=utf-8", "", 0)
 		_, _ = io.WriteString(w, "ok")
+	})
+
+	// Docker inspect proxy: returns `docker inspect <id>` output as JSON
+	// Query param: id=<container-or-task-id>
+	mux.HandleFunc("/docker/inspect", func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSpace(r.URL.Query().Get("id"))
+		if id == "" {
+			httpError(log, w, r, http.StatusBadRequest, "missing id param")
+			return
+		}
+
+		// Short timeout for docker CLI calls
+		ctx := r.Context()
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		cmd := exec.CommandContext(ctx, "docker", "inspect", id)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			// Log warning and return a 500 with the CLI output for easier debugging
+			log.Warn("docker inspect failed", "id", id, "err", err.Error(), "output", string(out))
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			http.Error(w, fmt.Sprintf("docker inspect error: %s\n%s", err.Error(), string(out)), http.StatusInternalServerError)
+			return
+		}
+
+		// Return the raw JSON from docker inspect
+		setCommonHeaders(w, "application/json; charset=utf-8", "", 0)
+		_, _ = w.Write(out)
 	})
 
 	// Optional: static UI at /assets/

@@ -8,6 +8,7 @@ interface ReactD3EdgeProps {
   onClick?: () => void
   onMouseEnter?: () => void
   onMouseLeave?: () => void
+  isDimmed?: boolean
 }
 
 const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
@@ -15,6 +16,7 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
   onClick,
   onMouseEnter,
   onMouseLeave,
+  isDimmed = false,
 }) => {
   // Calculate label text and positioning
   const getLabelText = () => {
@@ -49,7 +51,7 @@ const ReactD3Edge: React.FC<ReactD3EdgeProps> = ({
         y2={data.target.y || 0}
         stroke={colors.edge[data.kind as EdgeKind]}
         strokeWidth={2}
-        strokeOpacity={0.8}
+        strokeOpacity={isDimmed ? 0.18 : 0.8}
         markerEnd={`url(#arrow-${data.kind})`}
         style={{ cursor: onClick ? 'pointer' : 'default' }}
         onClick={onClick}

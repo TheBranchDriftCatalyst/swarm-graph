@@ -21,6 +21,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
   const zoomLayerRef = useRef<SVGGElement>(null)
   const [nodes, setNodes] = useState<NodeData[]>([])
   const [edges, setEdges] = useState<EdgeData[]>([])
+  const [zoomScale, setZoomScale] = useState<number>(1)
   const simulationRef = useRef<d3.Simulation<NodeData, undefined> | null>(null)
 
   // Initialize graph data and simulation
@@ -195,6 +196,10 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
       .scaleExtent([0.25, 3])
       .on('zoom', (event) => {
         zoomLayer.attr('transform', event.transform.toString())
+        // Keep current scale in React state for nodes to react to
+        try {
+          setZoomScale(event.transform.k)
+        } catch (e) {}
       })
 
     svg.call(zoom as any)
@@ -266,7 +271,7 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
           )
         })}
 
-        {/* Arrow markers for edges */}
+  {/* Arrow markers for edges */}
         {Object.keys(colors.edge).map((edgeType) => {
           const color = colors.edge[edgeType as EdgeKind]
           return (
@@ -286,6 +291,13 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
         })}
       </defs>
 
+      {/* Glow/drop-shadow filter used for hovered/selected nodes */}
+      <defs>
+        <filter id="node-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="0" stdDeviation="6" floodColor="#3A86FF" floodOpacity="0.6" />
+        </filter>
+      </defs>
+
       {/* Background */}
       <rect
         width={dimensions.width}
@@ -303,7 +315,19 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
         {/* Edges */}
         <g className="edges">
           {edges.map((edge, index) => (
-            <ReactD3Edge key={`${edge.src}-${edge.dst}-${index}`} data={edge} />
+            <ReactD3Edge
+              key={`${edge.src}-${edge.dst}-${index}`}
+              data={edge}
+              isDimmed={
+                Boolean(
+                  hoveredNode &&
+                    hoveredNode !== edge.source.id &&
+                    hoveredNode !== edge.target.id &&
+                    selectedNode !== edge.source.id &&
+                    selectedNode !== edge.target.id
+                )
+              }
+            />
           ))}
         </g>
 
@@ -315,6 +339,8 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
               data={node}
               isSelected={selectedNode === node.id}
               isHovered={hoveredNode === node.id}
+              zoom={zoomScale}
+              isDimmed={Boolean(hoveredNode && hoveredNode !== node.id && selectedNode !== node.id)}
               onMouseEnter={handleNodeMouseEnter(node.id)}
               onMouseLeave={handleNodeMouseLeave(node.id)}
               onClick={handleNodeClick(node.id)}

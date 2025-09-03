@@ -4,10 +4,17 @@ import { colors, nodeIcons } from './SwarmGraphStyles'
 import { NodeData } from './interfaces'
 import { NodeKind } from '../types'
 
+// TODO: we are going to have to extract the node type data differences here.
+// For example we want to be able to show only the logo controlled by a toggle 
+// button for all nodes and individuals nodes.  We also want to define 
+// ContainerNode, ImageNode, VolumeNode, NetworkEdge... as react first components
+
 interface ReactD3NodeProps {
   data: NodeData
   isSelected?: boolean
   isHovered?: boolean
+  zoom?: number
+  isDimmed?: boolean
   onMouseEnter?: () => void
   onMouseLeave?: () => void
   onClick?: () => void
@@ -49,10 +56,13 @@ const getNodeDimensions = (d: NodeData) => {
   return { width, height }
 }
 
+
 const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   data,
   isSelected = false,
   isHovered = false,
+  zoom,
+  isDimmed = false,
   onMouseEnter,
   onMouseLeave,
   onClick,
@@ -62,6 +72,7 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
 }) => {
   const groupRef = useRef<SVGGElement>(null)
   const { width, height } = getNodeDimensions(data)
+  const effectiveZoom = typeof zoom === 'number' ? zoom : 1
 
   // Constants
   const pad = 12
@@ -113,13 +124,13 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
 
   // Status styling
   const statusColor =
-    status === 'running'
+    (status === 'running' || status == 'in-use')
       ? '#00FF66'
       : status === 'stopped'
         ? '#FF3B30'
         : '#FFA500'
   const statusText =
-    (status === 'running' || status === 'IN-USE')
+    status === 'running'
       ? '#7CFC00'
       : status === 'stopped'
         ? '#FF6B6B'
@@ -128,8 +139,11 @@ const ReactD3Node: React.FC<ReactD3NodeProps> = ({
   return (
     <g
       ref={groupRef}
-      transform={`translate(${data.x || 0}, ${data.y || 0})`}
-      style={{ cursor: 'pointer' }}
+      transform={`translate(${data.x || 0}, ${data.y || 0}) scale(${Math.max(
+        0.5,
+        Math.min(1.6, 1 / effectiveZoom)
+      )})`}
+      style={{ cursor: 'pointer', opacity: isDimmed ? 0.35 : 1, filter: isSelected || isHovered ? 'url(#node-glow)' : undefined }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}
