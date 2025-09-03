@@ -11,6 +11,7 @@ import {
   NodeStatusFilter,
   NodeConnectionFilter
 } from './types/filterTypes'
+import { clearPersistedFilters } from './context/GraphContext'
 
 const FilterPanel: React.FC<FilterPanelProps> = ({ isVisible, onToggle }) => {
   const {
@@ -226,6 +227,24 @@ const FilterPanel: React.FC<FilterPanelProps> = ({ isVisible, onToggle }) => {
             ))}
           </div>
 
+                <button
+                  style={{ ...styles.filterButton, backgroundColor: 'rgba(255, 80, 80, 0.12)' }}
+                  onClick={() => {
+                    clearPersistedFilters()
+                    resetFilters()
+                  }}
+                  title="Clear saved filters from local storage and reset"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 80, 80, 0.2)'
+                    e.currentTarget.style.transform = 'translateY(-1px)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(255, 80, 80, 0.12)'
+                    e.currentTarget.style.transform = 'translateY(0px)'
+                  }}
+                >
+                  🗑️ Clear Saved
+                </button>
           {/* Edge Types */}
           <div style={styles.filterSection}>
             <div style={styles.filterSectionTitle}>Edge Types</div>

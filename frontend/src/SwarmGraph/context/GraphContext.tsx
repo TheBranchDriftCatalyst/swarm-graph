@@ -1,9 +1,21 @@
-import React, { createContext, useContext, useReducer, ReactNode } from 'react'
+import React, { createContext, useContext, useReducer, ReactNode, useEffect } from 'react'
 import { NodeKind, EdgeKind, GraphNode, GraphEdge } from '../../types'
 import { GraphData } from '../interfaces'
 import { GraphFilters, NodeStatusFilter, NodeConnectionFilter } from '../types/filterTypes'
 
 export type { NodeStatusFilter, NodeConnectionFilter, GraphFilters } from '../types/filterTypes'
+
+// Local storage key for persisted filters
+export const FILTERS_STORAGE_KEY = 'swarm-graph.filters.v1'
+
+// Helper to clear persisted filters from localStorage
+export function clearPersistedFilters() {
+  try {
+    localStorage.removeItem(FILTERS_STORAGE_KEY)
+  } catch (e) {
+    // ignore
+  }
+}
 
 export interface GraphState {
   rawData: GraphData | null
@@ -130,7 +142,29 @@ const GraphContext = createContext<{
 
 // Provider
 export const GraphProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [state, dispatch] = useReducer(graphReducer, initialState)
+  const [state, dispatch] = useReducer(graphReducer, initialState, (init) => {
+    try {
+      const raw = localStorage.getItem(FILTERS_STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        return { ...init, filters: { ...init.filters, ...parsed } }
+      }
+    } catch (e) {
+      // ignore parse/localstorage errors and fall back to defaults
+      // console.warn('Could not load saved filters', e)
+    }
+    return init
+  })
+
+  // Persist filters to localStorage whenever they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(state.filters))
+    } catch (e) {
+      // ignore storage errors
+      // console.warn('Could not save filters', e)
+    }
+  }, [state.filters])
 
   return (
     <GraphContext.Provider value={{ state, dispatch }}>
