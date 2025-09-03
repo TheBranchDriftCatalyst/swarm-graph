@@ -213,6 +213,15 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     try {
       event?.sourceEvent?.stopPropagation()
     } catch (e) {}
+    
+    // In structured layout, just set the node position without simulation
+    if (layout === 'structured') {
+      node.fx = node.x
+      node.fy = node.y
+      return
+    }
+    
+    // Force layout: interact with simulation
     if (!simulationRef.current) {
       return
     }
@@ -227,23 +236,42 @@ const ReactD3Graph: React.FC<ReactD3GraphProps> = ({
     try {
       event?.sourceEvent?.stopPropagation()
     } catch (e) {}
+    
+    // Update node position directly (works for both layouts)
     node.fx = event.x
     node.fy = event.y
+    
+    // In structured layout, also update the regular position so it renders immediately
+    if (layout === 'structured') {
+      node.x = event.x
+      node.y = event.y
+      // Trigger a re-render to show the updated position
+      setNodes([...nodes])
+    }
   }
 
   const handleDragEnd = (node: NodeData) => (event: any) => {
     try {
       event?.sourceEvent?.stopPropagation()
     } catch (e) {}
+    
+    // In structured layout, just finalize the position
+    if (layout === 'structured') {
+      node.fx = node.x
+      node.fy = node.y
+      return
+    }
+    
+    // Force layout: interact with simulation
     if (!simulationRef.current) {
       return
     }
     if (!event.active) {
       simulationRef.current.alphaTarget(0)
     }
-  // Make the node sticky at its new position so user moves persist
-  node.fx = node.x
-  node.fy = node.y
+    // Make the node sticky at its new position so user moves persist
+    node.fx = node.x
+    node.fy = node.y
   }
 
   // Zoom / pan setup
