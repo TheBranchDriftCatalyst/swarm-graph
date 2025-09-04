@@ -1,1 +1,46 @@
+# Temporary files
 **/tmp
+tmp/
+
+# Build artifacts
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+
+# Dependency directories
+node_modules/
+
+# Environment variables file
+.env
+.env.local
+.env.production
+
+# Build outputs
+.next
+.nuxt
+dist
+.cache
+.parcel-cache

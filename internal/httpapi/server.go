@@ -22,6 +22,9 @@ import (
 
 	httpSwagger "github.com/swaggo/http-swagger"
 
+	// Import docs package to ensure swagger info is initialized
+	_ "swarm-graph/internal/httpapi/docs"
+
 	// embed swagger.json so we can serve /swagger/doc.json even if the swag
 	// generated docs.go (docs.ReadDoc) is not present. This keeps the dev
 	// experience simple: the generated swagger.json/yaml in internal/httpapi/docs

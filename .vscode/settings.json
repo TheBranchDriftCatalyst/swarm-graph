@@ -16,6 +16,7 @@
       "**/air.toml": "./.air.schema.json"
     },
     "cSpell.words": [
-      "traefik"
+      "traefik",
+      "gwbridge"
     ]
 }
