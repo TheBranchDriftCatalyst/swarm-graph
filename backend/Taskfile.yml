@@ -1,0 +1,47 @@
+version: "3"
+
+includes:
+  docker: "../etc/Taskfile.docker.yml"
+
+vars:
+  DOCKER_BUILD_TAG: "swarm-graph:latest"
+
+tasks:
+
+  # Go module tasks (backend)
+  deps:
+    desc: Download all required dependencies for the module
+    cmds:
+    - go get ./...
+
+  tidy:
+    desc: Add missing and remove unused dependencies
+    cmds:
+    - go mod tidy
+
+  refresh:
+    desc: Fetch missing deps and tidy up
+    cmds:
+    - task: deps
+    - task: tidy
+
+  build:
+    desc: Build the agent binary
+    cmds:
+    - go build -o bin/agent ./cmd/agent
+
+  run:
+    desc: Run the agent locally
+    cmds:
+    - go run ./cmd/agent/main.go
+
+  dev:
+    desc: Run with live reload (air)
+    cmds:
+    - air
+
+  fixture:graph:
+    desc: Fetch a graph.json fixture from a running agent
+    cmds:
+    - mkdir -p fixtures
+    - curl -sS http://localhost:9123/graph.json -o fixtures/graph.json

@@ -5,11 +5,11 @@ volumes:
 services:
   backend:
     build:
-      context: .
+      context: ./backend
       target: dev
     image: swarm-graph:dev
     volumes:
-      - ./:/app:cached
+      - ./backend:/app:cached
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "9123:9123"

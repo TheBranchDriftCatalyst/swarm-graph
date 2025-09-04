@@ -30,7 +30,7 @@ ENTRYPOINT ["./agent"]
 
 # Optional dev stage for live reload (use only in development)
 # docker build --target=dev -t myapp:dev .
-FROM golang:1.23-alpine AS dev
+FROM golang:1.24-alpine AS dev
 WORKDIR /app
 RUN apk add --no-cache bash git
 RUN go install github.com/air-verse/air@latest

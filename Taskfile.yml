@@ -1,98 +1,18 @@
 version: "3"
 
-# TODO add swagger generation command here as well
-# TODO: extract docker commands into a Taskfile.Docker.yml 
-# Also do the same for common go commands then include them here
+includes:
+  backend: backend/Taskfile.yml
+  # This is going to be imported by our dependents
+  # docker: Taskfile.docker.yml
 
 tasks:
 
-  # Get all missing dependencies based on imports
-  deps:
-    desc: Download all required dependencies for the module
-    cmds:
-    - go get ./...
-
-  # Clean up go.mod and go.sum
-  tidy:
-    desc: Add missing and remove unused dependencies
-    cmds:
-    - go mod tidy
-
-  # Full dependency refresh: get and tidy
-  refresh:
-    desc: Fetch missing deps and tidy up
-    cmds:
-    - task: deps
-    - task: tidy
-
-  # Build the agent binary
-  build:
-    desc: Build the agent
-    cmds:
-    - mkdir -p bin
-    # TODO: add release management here
-    - go build -o bin/agent ./cmd/agent
-
-  # release:
-
-  # Run the agent directly
-  run:
-    desc: Run the agent
-    cmds:
-    - go run ./cmd/agent/main.go
-
-  # Run with live reload (air)
-  dev:
-    desc: Run with live reload (air)
-    cmds:
-    - mkdir -p bin
-    - air
-
-  # Docker helper tasks
-  docker:build:
-    desc: Build the production Docker image
-    cmds:
-    - docker build -t swarm-graph:latest .
-
-  docker:up:
-    desc: Start compose (production)
-    cmds:
-    - docker compose up --build -d
-
-  docker:down:
-    desc: Stop compose
-    cmds:
-    - docker compose down
-
-  docker:dev:up:
-    desc: Start the dev compose service (mounts source and runs air)
-    cmds:
-    # run docker compose up with no cache
-    - docker compose up
-
   frontend:install:
-    desc: Install frontend dependencies (yarn)
+    desc: (helper) Install frontend dependencies using yarn
     cmds:
     - cd frontend && yarn install
 
   frontend:dev:
-    desc: Run frontend dev server
+    desc: (helper) Run frontend dev server
     cmds:
     - cd frontend && yarn dev
-
-  compose:rebuild:
-    desc: Rebuild compose images without cache and bring services up
-    cmds:
-    - docker compose build --no-cache
-    - docker compose up -d
-
-  fixture:graph:
-    desc: Fetch a graph.json fixture from a running agent
-    cmds:
-    - mkdir -p fixtures
-    - curl -sS http://localhost:9123/graph.json -o fixtures/graph.json
-
-  docker:dev:down:
-    desc: Stop the dev compose services
-    cmds:
-    - docker compose down

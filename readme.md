@@ -12,9 +12,9 @@
 
 ## Screenshots
 
-![alt text](image.png)
+![alt text](etc/image.png)
 
-![alt text](image-1.png)
+![alt text](etc/image-1.png)
 
 ## Swarm Graph — local Docker topology explorer
 

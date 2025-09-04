@@ -1,0 +1,92 @@
+{
+  "nodes": {
+    "bc19f5ed9a54719bcfcd319b536c68c54ebc09f131b3f5e827b60a8e027a6a70": {
+      "id": "bc19f5ed9a54719bcfcd319b536c68c54ebc09f131b3f5e827b60a8e027a6a70",
+      "kind": "network",
+      "name": "host",
+      "attributes": {
+        "driver": "host",
+        "scope": "local"
+      }
+    },
+    "debf9c7e6174a8639b8856b28b408ca5e1a41463140f3ed3380fc2d07c775bd6": {
+      "id": "debf9c7e6174a8639b8856b28b408ca5e1a41463140f3ed3380fc2d07c775bd6",
+      "kind": "network",
+      "name": "bridge",
+      "attributes": {
+        "driver": "bridge",
+        "scope": "local"
+      }
+    },
+    "f2b67a4d92fbbb469e9cc1c4925ed99e67c8588eebfbec5e500c6b6edb108e24": {
+      "id": "f2b67a4d92fbbb469e9cc1c4925ed99e67c8588eebfbec5e500c6b6edb108e24",
+      "kind": "network",
+      "name": "none",
+      "attributes": {
+        "driver": "null",
+        "scope": "local"
+      }
+    },
+    "sha256:5a7cf0d0355b7aa3f8d967d2c0d238e78b1c4a9e0d045e4b63da410c190d0e1b": {
+      "id": "sha256:5a7cf0d0355b7aa3f8d967d2c0d238e78b1c4a9e0d045e4b63da410c190d0e1b",
+      "kind": "image",
+      "name": "swarm-graph-frontend:latest",
+      "attributes": {
+        "digests": "",
+        "size": "695238961",
+        "tags": "swarm-graph-frontend:latest"
+      }
+    },
+    "sha256:69d95f0f6d1adb2c7db465d139ea4c823e4a3d509ce8902f43e625bd3e954d2f": {
+      "id": "sha256:69d95f0f6d1adb2c7db465d139ea4c823e4a3d509ce8902f43e625bd3e954d2f",
+      "kind": "image",
+      "name": "yuzutech/kroki:latest",
+      "attributes": {
+        "digests": "yuzutech/kroki@sha256:710a5e8d57344769846695431ceefc02aaf908e9958c9d459171d2255ee2f7f5",
+        "size": "2408587083",
+        "tags": "yuzutech/kroki:latest"
+      }
+    },
+    "sha256:a1e7bbee58e376f3cbe3c92b3096ed173c886c1efe98b3960b4b43a3ca0c27e8": {
+      "id": "sha256:a1e7bbee58e376f3cbe3c92b3096ed173c886c1efe98b3960b4b43a3ca0c27e8",
+      "kind": "image",
+      "name": "sha256:a1e7b",
+      "attributes": {
+        "digests": "",
+        "size": "554840313",
+        "tags": ""
+      }
+    },
+    "sha256:c841a6e5c9c102fef7e086d93c27d0e20380fba1bc4a92e62db7c9a8d96b2dcc": {
+      "id": "sha256:c841a6e5c9c102fef7e086d93c27d0e20380fba1bc4a92e62db7c9a8d96b2dcc",
+      "kind": "image",
+      "name": "swarm-graph:dev",
+      "attributes": {
+        "digests": "",
+        "size": "554840327",
+        "tags": "swarm-graph:dev,swarm-graph:latest"
+      }
+    },
+    "sha256:d5f66716aee73ed089201fda32413984478bb16a51bfe097bd7eb86525554994": {
+      "id": "sha256:d5f66716aee73ed089201fda32413984478bb16a51bfe097bd7eb86525554994",
+      "kind": "image",
+      "name": "sha256:d5f66",
+      "attributes": {
+        "digests": "",
+        "size": "554840390",
+        "tags": ""
+      }
+    },
+    "swarm-graph_frontend_node_modules": {
+      "id": "swarm-graph_frontend_node_modules",
+      "kind": "volume",
+      "name": "swarm-graph_frontend_node_modules",
+      "attributes": {
+        "driver": "local",
+        "mountpoint": "/var/lib/docker/volumes/swarm-graph_frontend_node_modules/_data",
+        "status": "available"
+      }
+    }
+  },
+  "edges": []
+}
