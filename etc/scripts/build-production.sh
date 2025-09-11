@@ -24,6 +24,8 @@ REGISTRY_URL="${REGISTRY_URL:-}"
 IMAGE_NAME="${IMAGE_NAME:-swarm-graph}"
 DOCKERFILE="Dockerfile.production"
 VERSION_FILE="VERSION"
+BUILDX_ENABLED="${BUILDX_ENABLED:-false}"
+BUILD_ARCHS="${BUILD_ARCHS:-linux/amd64,linux/arm64}"
 
 # Helper functions
 log_info() {
@@ -141,10 +143,23 @@ build_docker_image() {
     log_info "Building Docker image: $image_base:$version"
     
     # Build with version tag and latest tag
-    docker build -f "$DOCKERFILE" \
-        -t "$image_base:$version" \
-        -t "$image_base:latest" \
-        .
+    if [[ "$BUILDX_ENABLED" == "true" ]]; then
+        log_info "Building multi-arch images with buildx for: ${BUILD_ARCHS}"
+        ensure_buildx
+        # buildx will create a manifest list and push multi-arch images when --push is used
+        docker buildx build --platform "$BUILD_ARCHS" \
+            -f "$DOCKERFILE" \
+            -t "$image_base:$version" \
+            -t "$image_base:latest" \
+            --push \
+            .
+        # In buildx push mode images are already pushed; set DOCKER_IMAGE_* to the remote references
+    else
+        docker build -f "$DOCKERFILE" \
+            -t "$image_base:$version" \
+            -t "$image_base:latest" \
+            .
+    fi
     
     log_success "Docker image built successfully"
     
@@ -168,6 +183,26 @@ push_docker_images() {
     docker push "$DOCKER_IMAGE_LATEST"
     
     log_success "Docker images pushed to registry"
+}
+
+# Ensure buildx is available and qemu registered for multi-arch builds
+ensure_buildx() {
+    if ! docker buildx version > /dev/null 2>&1; then
+        log_error "docker buildx is not available. Please enable Docker Buildx on your host."
+        log_info "See: https://docs.docker.com/buildx/working-with-buildx/"
+        exit 1
+    fi
+
+    # Try to register qemu emulators for cross-building (best-effort)
+    if ! docker run --rm --privileged tonistiigi/binfmt --version > /dev/null 2>&1; then
+        log_info "Registering QEMU emulators for cross-building..."
+        if docker run --rm --privileged tonistiigi/binfmt --install all > /dev/null 2>&1; then
+            log_info "QEMU emulators registered"
+        else
+            log_warning "Failed to register QEMU emulators. Cross-builds may fail on some hosts."
+            log_info "If you are on a Linux host, ensure binfmt_misc and qemu-user-static are available."
+        fi
+    fi
 }
 
 # Save version to file

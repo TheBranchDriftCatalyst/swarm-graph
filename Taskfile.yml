@@ -41,6 +41,15 @@ tasks:
     cmds:
     - docker build -f Dockerfile.production -t swarm-graph:production .
 
+  docker:build:multiarch:
+    desc: Build and push multi-arch images using Docker Buildx (requires buildx setup)
+    env:
+      BUILDX_ENABLED: true
+      BUILD_ARCHS: linux/amd64,linux/arm64
+    deps: [ build ]
+    cmds:
+    - ./etc/scripts/build-production.sh
+
   docker:run:production:
     desc: Run production Docker container
     deps: [ docker:build:production ]
