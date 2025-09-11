@@ -48,7 +48,7 @@ tasks:
       BUILD_ARCHS: linux/amd64,linux/arm64
     deps: [ build ]
     cmds:
-    - ./etc/scripts/build-production.sh
+    - ./etc/scripts/build-release.sh
 
   docker:run:production:
     desc: Run production Docker container
@@ -65,19 +65,19 @@ tasks:
   release:patch:
     desc: Build and release patch version (0.0.X)
     cmds:
-    - ./etc/scripts/build-production.sh patch
+    - ./etc/scripts/build-release.sh patch
 
   release:minor:
     desc: Build and release minor version (0.X.0)
     cmds:
-    - ./etc/scripts/build-production.sh minor
+    - ./etc/scripts/build-release.sh minor
 
   release:major:
     desc: Build and release major version (X.0.0)
     cmds:
-    - ./etc/scripts/build-production.sh major
+    - ./etc/scripts/build-release.sh major
 
   release:
     desc: Build and release patch version (alias for release:patch)
     cmds:
-    - ./etc/scripts/build-production.sh patch
+    - ./etc/scripts/build-release.sh patch

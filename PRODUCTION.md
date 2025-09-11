@@ -129,7 +129,7 @@ This removes:
 
 ### Automated Release Script
 
-The repository includes a comprehensive release script at `etc/scripts/build-production.sh` that handles:
+The repository includes a comprehensive release script at `etc/scripts/build-release.sh` that handles:
 
 - Version management (semantic versioning)
 - Building frontend and backend
@@ -176,12 +176,12 @@ export REGISTRY_URL=registry.company.com/team
 export REGISTRY_URL=docker.io/yourusername
 
 # Run release script directly
-./etc/scripts/build-production.sh patch    # Patch version
-./etc/scripts/build-production.sh minor    # Minor version
-./etc/scripts/build-production.sh major    # Major version
+./etc/scripts/build-release.sh patch    # Patch version
+./etc/scripts/build-release.sh minor    # Minor version
+./etc/scripts/build-release.sh major    # Major version
 
 # Force specific version
-./etc/scripts/build-production.sh patch 1.2.3
+./etc/scripts/build-release.sh patch 1.2.3
 ```
 
 ### What the Release Script Does
