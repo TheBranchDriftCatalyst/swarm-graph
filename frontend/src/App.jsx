@@ -27,8 +27,8 @@ function SimpleNode({ n }) {
 }
 
 export default function App() {
+  // Don't hard-code localhost in production. The default in the hook is '/graph.json'
   const data = useDockerGraph({
-    url: 'http://localhost:9123/graph.json',
     interval: 100_000_000,
   })
 

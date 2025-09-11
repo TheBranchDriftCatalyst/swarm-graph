@@ -9,7 +9,9 @@ type Opts = {
 }
 
 export default function useDockerGraph(opts: Opts = {}) {
-  const url = opts.url || 'http://localhost:9123/graph.json'
+  // Use relative path by default so frontend works when served from the same host
+  // in production (no hardcoded localhost). Pass opts.url to override in dev.
+  const url = opts.url || '/graph.json'
   const intervalMs = typeof opts.interval === 'number' ? opts.interval : 2000
 
   const [nodes, setNodes] = useState<AnyNode[]>([])
