@@ -87,6 +87,7 @@ Quick production commands:
 - `task build` — build frontend + backend for production
 - `task run:production` — run production build locally
 - `task docker:build:production` — build production Docker image
+- `task release` — automated release with version bump and registry push
 
 Frontend development
 

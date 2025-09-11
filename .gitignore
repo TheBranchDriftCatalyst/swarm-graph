@@ -43,4 +43,4 @@ node_modules/
 .nuxt
 dist
 .cache
-.parcel-cache
+.parcel-cache/.env

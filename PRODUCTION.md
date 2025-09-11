@@ -124,3 +124,92 @@ task clean
 This removes:
 - `frontend/dist/`
 - `backend/bin/agent`
+
+## Release and Registry Push
+
+### Automated Release Script
+
+The repository includes a comprehensive release script at `etc/scripts/build-production.sh` that handles:
+
+- Version management (semantic versioning)
+- Building frontend and backend
+- Creating Docker images with proper tags
+- Git tagging with build metadata
+- Pushing to Docker registry
+- Pushing git tags to remote
+
+### Quick Release Commands
+
+```bash
+# Patch release (0.0.X) - most common
+task release
+
+# Minor release (0.X.0) - new features
+task release:minor
+
+# Major release (X.0.0) - breaking changes
+task release:major
+```
+
+### Registry Configuration
+
+Set up your Docker registry in environment variables:
+
+```bash
+# Docker Hub
+export REGISTRY_URL=docker.io/yourusername
+
+# Google Container Registry
+export REGISTRY_URL=gcr.io/your-project-id
+
+# AWS ECR
+export REGISTRY_URL=123456789012.dkr.ecr.us-west-2.amazonaws.com
+
+# Private Registry
+export REGISTRY_URL=registry.company.com/team
+```
+
+### Manual Release Process
+
+```bash
+# Set registry (optional)
+export REGISTRY_URL=docker.io/yourusername
+
+# Run release script directly
+./etc/scripts/build-production.sh patch    # Patch version
+./etc/scripts/build-production.sh minor    # Minor version
+./etc/scripts/build-production.sh major    # Major version
+
+# Force specific version
+./etc/scripts/build-production.sh patch 1.2.3
+```
+
+### What the Release Script Does
+
+1. **Pre-flight checks**: Ensures clean git working tree
+2. **Version bump**: Increments version in `VERSION` file
+3. **Build**: Compiles frontend and backend
+4. **Docker build**: Creates tagged images (`version` and `latest`)
+5. **Git operations**: Creates annotated tag and commits version
+6. **Registry push**: Pushes images to configured registry
+7. **Git push**: Pushes tags to remote repository
+
+### Version Tracking
+
+The project uses a `VERSION` file to track the current version. Git tags are created as `v{version}` (e.g., `v1.2.3`).
+
+### Registry Examples
+
+```bash
+# Docker Hub example
+REGISTRY_URL=docker.io/myuser task release:minor
+# Creates: docker.io/myuser/swarm-graph:1.1.0
+
+# Google Cloud example  
+REGISTRY_URL=gcr.io/my-project task release:patch
+# Creates: gcr.io/my-project/swarm-graph:1.0.1
+
+# Private registry example
+REGISTRY_URL=registry.company.com IMAGE_NAME=swarm-graph task release:major
+# Creates: registry.company.com/swarm-graph:2.0.0
+```

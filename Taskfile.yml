@@ -52,3 +52,23 @@ tasks:
     cmds:
     - rm -rf frontend/dist
     - rm -f backend/bin/agent
+
+  release:patch:
+    desc: Build and release patch version (0.0.X)
+    cmds:
+    - ./etc/scripts/build-production.sh patch
+
+  release:minor:
+    desc: Build and release minor version (0.X.0)
+    cmds:
+    - ./etc/scripts/build-production.sh minor
+
+  release:major:
+    desc: Build and release major version (X.0.0)
+    cmds:
+    - ./etc/scripts/build-production.sh major
+
+  release:
+    desc: Build and release patch version (alias for release:patch)
+    cmds:
+    - ./etc/scripts/build-production.sh patch
