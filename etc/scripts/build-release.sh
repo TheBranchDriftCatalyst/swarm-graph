@@ -153,6 +153,22 @@ build_docker_image() {
             -t "$image_base:latest" \
             --push \
             .
+        # Some registries or buildx setups may not create the 'latest' manifest list
+        # consistently. Ensure 'latest' points to the same multi-arch manifest as the
+        # versioned tag by explicitly creating/pushing it from the version manifest.
+        if command -v docker > /dev/null 2>&1 && docker buildx imagetools > /dev/null 2>&1; then
+            log_info "Ensuring '${image_base}:latest' manifest points to '${image_base}:${version}'"
+            if docker buildx imagetools create --tag "${image_base}:latest" "${image_base}:${version}" > /dev/null 2>&1; then
+                log_info "Created/updated manifest for ${image_base}:latest"
+                docker buildx imagetools inspect "${image_base}:latest" || true
+            else
+                log_warning "Failed to create imagetools manifest for ${image_base}:latest; trying docker manifest fallback"
+                if command -v docker > /dev/null 2>&1 && docker manifest > /dev/null 2>&1; then
+                    docker manifest create "${image_base}:latest" "${image_base}:${version}" || true
+                    docker manifest push "${image_base}:latest" || true
+                fi
+            fi
+        fi
         # In buildx push mode images are already pushed; set DOCKER_IMAGE_* to the remote references
     else
         docker build -f "$DOCKERFILE" \
@@ -203,6 +219,18 @@ ensure_buildx() {
             log_info "If you are on a Linux host, ensure binfmt_misc and qemu-user-static are available."
         fi
     fi
+
+    # Ensure a buildx builder exists and is bootstrapped
+    local builder_name=${BUILDX_BUILDER_NAME:-swarmgraph-builder}
+    if ! docker buildx inspect "$builder_name" > /dev/null 2>&1; then
+        log_info "Creating buildx builder: $builder_name"
+        docker buildx create --name "$builder_name" --use > /dev/null
+    else
+        # Use the builder if it exists
+        docker buildx use "$builder_name" > /dev/null 2>&1 || true
+    fi
+    log_info "Bootstrapping buildx builder..."
+    docker buildx inspect --bootstrap > /dev/null 2>&1 || true
 }
 
 # Save version to file
@@ -334,10 +362,21 @@ main() {
     
     # Step 4: Push Docker images (if registry configured)
     if [[ -n "$REGISTRY_URL" ]]; then
-        if ! push_docker_images; then
-            log_error "Docker push failed, rolling back version commit"
-            rollback_version "$current_version"
-            exit 1
+        # If buildx was used with --push the images were already pushed
+        if [[ "$BUILDX_ENABLED" == "true" ]]; then
+            log_info "Buildx push was used; images should already be available in the registry"
+            # Show manifest info to verify multi-arch images
+            if command -v docker > /dev/null 2>&1; then
+                log_info "Inspecting image manifest for verification"
+                docker buildx imagetools inspect "${DOCKER_IMAGE_VERSIONED}" || docker manifest inspect "${DOCKER_IMAGE_VERSIONED}" || true
+                docker buildx imagetools inspect "${DOCKER_IMAGE_LATEST}" || docker manifest inspect "${DOCKER_IMAGE_LATEST}" || true
+            fi
+        else
+            if ! push_docker_images; then
+                log_error "Docker push failed, rolling back version commit"
+                rollback_version "$current_version"
+                exit 1
+            fi
         fi
     fi
     
