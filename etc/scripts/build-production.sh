@@ -5,6 +5,13 @@
 
 set -euo pipefail
 
+# Load environment variables from .env file if it exists
+if [[ -f ".env" ]]; then
+    set -a  # automatically export all variables
+    source .env
+    set +a  # disable automatic export
+fi
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -33,6 +40,22 @@ log_warning() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Display current configuration
+show_config() {
+    log_info "Configuration:"
+    echo "  REGISTRY_URL: ${REGISTRY_URL:-"(not set)"}"
+    echo "  IMAGE_NAME: ${IMAGE_NAME}"
+    echo "  DOCKERFILE: ${DOCKERFILE}"
+    echo "  VERSION_FILE: ${VERSION_FILE}"
+    echo "  PUSH_GIT_TAGS: ${PUSH_GIT_TAGS:-true}"
+    if [[ -n "$REGISTRY_URL" ]]; then
+        echo "  Full image name: ${REGISTRY_URL}/${IMAGE_NAME}"
+    else
+        echo "  Full image name: ${IMAGE_NAME} (local only)"
+    fi
+    echo
 }
 
 # Check if we're in a git repository
@@ -209,6 +232,9 @@ main() {
     
     log_info "Starting production build and release process..."
     
+    # Show current configuration
+    show_config
+    
     # Pre-flight checks
     check_git_repo
     check_clean_working_tree
@@ -233,8 +259,11 @@ main() {
     echo "  1. Build frontend and backend"
     echo "  2. Bump version and commit changes"
     echo "  3. Create Docker image: ${REGISTRY_URL:+$REGISTRY_URL/}$IMAGE_NAME:$new_version"
-    # Indicate that pushing to Docker registry is skipped
-    echo "  4. Push to Docker registry: SKIPPED"
+    if [[ -n "$REGISTRY_URL" ]]; then
+        echo "  4. Push to Docker registry: $REGISTRY_URL"
+    else
+        echo "  4. Push to Docker registry: SKIPPED (no REGISTRY_URL set)"
+    fi
     echo "  5. Create git tag: v$new_version (only after successful build/push)"
     echo "  6. Push git tags to remote"
     echo
