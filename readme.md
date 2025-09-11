@@ -69,6 +69,25 @@ task build
 task dev
 ```
 
+## Production Build
+
+For production deployment, you can build a single Docker image that combines the backend and frontend:
+
+```bash
+# Build production image
+task docker:build:production
+
+# Run production container
+task docker:run:production
+```
+
+The production build creates a single Go binary that serves both the API and the built React frontend. See [PRODUCTION.md](PRODUCTION.md) for detailed instructions.
+
+Quick production commands:
+- `task build` — build frontend + backend for production
+- `task run:production` — run production build locally
+- `task docker:build:production` — build production Docker image
+
 Frontend development
 
 ```bash

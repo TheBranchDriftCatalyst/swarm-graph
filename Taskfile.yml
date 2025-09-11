@@ -16,3 +16,39 @@ tasks:
     desc: (helper) Run frontend dev server
     cmds:
     - cd frontend && yarn dev
+
+  frontend:build:
+    desc: Build frontend for production
+    deps: [ frontend:install ]
+    cmds:
+    - cd frontend && yarn build
+
+  build:
+    desc: Build complete production application
+    deps: [ frontend:build ]
+    cmds:
+    - cd backend && go build -o bin/agent ./cmd/agent
+
+  run:production:
+    desc: Run production build (requires build task to be run first)
+    deps: [ build ]
+    cmds:
+    - cd backend && STATIC_PATH=../frontend/dist ./bin/agent
+
+  docker:build:production:
+    desc: Build production Docker image
+    deps: [ build ]
+    cmds:
+    - docker build -f Dockerfile.production -t swarm-graph:production .
+
+  docker:run:production:
+    desc: Run production Docker container
+    deps: [ docker:build:production ]
+    cmds:
+    - docker run -p 9123:9123 -v /var/run/docker.sock:/var/run/docker.sock swarm-graph:production
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+    - rm -rf frontend/dist
+    - rm -f backend/bin/agent

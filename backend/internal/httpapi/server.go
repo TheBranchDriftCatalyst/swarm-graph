@@ -15,6 +15,8 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 	"swarm-graph/internal/store"
 	"swarm-graph/internal/utils"
 	"text/template"
@@ -50,9 +52,10 @@ var swaggerJSON []byte
 // prefer http.Dir at runtime. In production you may want to embed the files.
 
 type Options struct {
-	Logger   *slog.Logger
-	KrokiURL string        // e.g. "https://kroki.io" or your self-hosted URL
-	Timeout  time.Duration // HTTP client timeout for Kroki; default 5s
+	Logger     *slog.Logger
+	KrokiURL   string        // e.g. "https://kroki.io" or your self-hosted URL
+	Timeout    time.Duration // HTTP client timeout for Kroki; default 5s
+	StaticPath string        // Path to static files directory (e.g., "../frontend/dist")
 	// CacheMaxAge controls browser cache headers for rendered images
 	CacheMaxAge time.Duration // default 30s
 }
@@ -127,8 +130,11 @@ func Handler(st *store.MemoryStore, optFns ...func(*Options)) http.Handler {
 	// Serve the Swagger UI; point it to our doc.json
 	router.Handle("/swagger/", httpSwagger.WrapHandler)
 
-	// Static assets
-	// router.Handle("/assets/", http.StripPrefix("/assets/", http.FileServer(http.FS(uiFS))))
+	// Static assets for production frontend
+	if opts.StaticPath != "" {
+		staticHandler := createStaticHandler(opts.StaticPath, log)
+		router.Handle("/", staticHandler)
+	}
 
 	// Apply CORS and access logging middleware to entire API
 	corsOrigin := envOr("CORS_ORIGIN", "*")
@@ -176,6 +182,45 @@ func envOr(k, def string) string {
 }
 
 /* ---------- tiny HTML viewers (embedded) ---------- */
+
+// createStaticHandler creates a handler for serving static files with SPA support
+func createStaticHandler(staticPath string, log *slog.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Clean the path to prevent directory traversal
+		path := filepath.Clean(r.URL.Path)
+
+		// Remove leading slash for file system access
+		if strings.HasPrefix(path, "/") {
+			path = path[1:]
+		}
+
+		// If path is empty, serve index.html
+		if path == "" {
+			path = "index.html"
+		}
+
+		// Full file path
+		fullPath := filepath.Join(staticPath, path)
+
+		// Check if file exists
+		if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+			// For SPA routing, serve index.html for non-API routes
+			if !strings.HasPrefix(r.URL.Path, "/api/") &&
+				!strings.HasPrefix(r.URL.Path, "/graph") &&
+				!strings.HasPrefix(r.URL.Path, "/docker/") &&
+				!strings.HasPrefix(r.URL.Path, "/health") &&
+				!strings.HasPrefix(r.URL.Path, "/swagger/") {
+				fullPath = filepath.Join(staticPath, "index.html")
+			} else {
+				http.NotFound(w, r)
+				return
+			}
+		}
+
+		// Serve the file
+		http.ServeFile(w, r, fullPath)
+	})
+}
 
 // Fallback page shown when Kroki is unavailable.
 var tmplFallbackHTML = template.Must(template.New("fallback").Parse(`<!doctype html>

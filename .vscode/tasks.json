@@ -1,36 +1,50 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "air (dlv)",
-      "type": "shell",
-      "command": "air",
-      "options": {
-        "env": {
-          "LOG_LEVEL": "DEBUG",
-          "DOCKER_HOST": "unix:///var/run/docker.sock"
-        }
-      },
-      "isBackground": true,
-      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true },
-      "problemMatcher": {
-        "owner": "custom",
-        "pattern": {
-          "regexp": "^(.*)$",
-          "message": 1
-        },
-        "background": {
-          "activeOnStart": true,
-          "beginsPattern": ".*",
-          "endsPattern": "API server listening at:"
-        }
-      }
-    },
-    {
-      "label": "air: stop",
-      "type": "shell",
-      "command": "pkill -f \"dlv exec .* ./bin/agent\" || true",
-      "problemMatcher": []
-    }
-  ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "air (dlv)",
+			"type": "shell",
+			"command": "air",
+			"options": {
+				"env": {
+					"LOG_LEVEL": "DEBUG",
+					"DOCKER_HOST": "unix:///var/run/docker.sock"
+				}
+			},
+			"isBackground": true,
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			},
+			"problemMatcher": {
+				"owner": "custom",
+				"pattern": {
+					"regexp": "^(.*)$",
+					"message": 1
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".*",
+					"endsPattern": "API server listening at:"
+				}
+			}
+		},
+		{
+			"label": "air: stop",
+			"type": "shell",
+			"command": "pkill -f \"dlv exec .* ./bin/agent\" || true",
+			"problemMatcher": []
+		},
+		{
+			"label": "test-frontend-build",
+			"type": "shell",
+			"command": "cd frontend && yarn install && yarn build"
+		},
+		{
+			"label": "test-backend-build",
+			"type": "shell",
+			"command": "cd backend && go build -o bin/agent ./cmd/agent"
+		}
+	]
 }
