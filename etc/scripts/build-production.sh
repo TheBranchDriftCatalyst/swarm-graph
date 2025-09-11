@@ -5,19 +5,15 @@
 
 set -euo pipefail
 
-# Load environment variables from .env file if it exists
-if [[ -f ".env" ]]; then
-    set -a  # automatically export all variables
-    source .env
-    set +a  # disable automatic export
-fi
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# Load shared libraries
+source "$SCRIPT_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/docker-hub.sh"
+
+# Load environment variables
+load_env
 
 # Configuration
 REGISTRY_URL="${REGISTRY_URL:-}"
@@ -26,21 +22,6 @@ DOCKERFILE="Dockerfile.production"
 VERSION_FILE="VERSION"
 
 # Helper functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
-
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
 
 # Display current configuration
 show_config() {
@@ -261,6 +242,9 @@ main() {
     echo "  3. Create Docker image: ${REGISTRY_URL:+$REGISTRY_URL/}$IMAGE_NAME:$new_version"
     if [[ -n "$REGISTRY_URL" ]]; then
         echo "  4. Push to Docker registry: $REGISTRY_URL"
+        if [[ "$REGISTRY_URL" =~ docker\.io ]] && [[ -f "docker/README.md" ]]; then
+            echo "  4.5. Update Docker Hub description and README"
+        fi
     else
         echo "  4. Push to Docker registry: SKIPPED (no REGISTRY_URL set)"
     fi
@@ -304,6 +288,9 @@ main() {
             rollback_version "$current_version"
             exit 1
         fi
+        
+        # Step 4.5: Update Docker Hub metadata (if applicable)
+        update_docker_hub_metadata "$REGISTRY_URL" "$IMAGE_NAME"
     fi
     
     # Step 5: Create git tag (only after successful build and push)

@@ -72,3 +72,15 @@ tasks:
     desc: Build and release patch version (alias for release:patch)
     cmds:
     - ./etc/scripts/build-production.sh patch
+
+  docker:hub:update:
+    desc: Update Docker Hub repository description and README
+    cmds:
+    - ./etc/scripts/update-docker-hub.sh
+
+  docker:hub:update:api:
+    desc: Update Docker Hub repository via API (requires DOCKERHUB credentials)
+    env:
+      DOCKERHUB_ENABLE_API_UPDATE: true
+    cmds:
+    - ./etc/scripts/update-docker-hub.sh
