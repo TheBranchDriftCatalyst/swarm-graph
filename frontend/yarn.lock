@@ -515,9 +515,9 @@
     "@types/d3-zoom" "*"
 
 "@types/debug@^4.1.7":
-  version "4.1.12"
-  resolved "https://registry.npmjs.org/@types/debug/-/debug-4.1.12.tgz"
-  integrity sha512-vIChWdVG3LG1SMxEvI/AK+FWJthlrqlTu7fbrlywTkkaONwk/UAGaULXRlf8vkzFBLVm0zkMdCquhL5aOjhXPQ==
+  version "4.1.13"
+  resolved "https://registry.yarnpkg.com/@types/debug/-/debug-4.1.13.tgz#22d1cc9d542d3593caea764f974306ab36286ee7"
+  integrity sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==
   dependencies:
     "@types/ms" "*"
 
@@ -528,7 +528,7 @@
 
 "@types/ms@*":
   version "2.1.0"
-  resolved "https://registry.npmjs.org/@types/ms/-/ms-2.1.0.tgz"
+  resolved "https://registry.yarnpkg.com/@types/ms/-/ms-2.1.0.tgz#052aa67a48eccc4309d7f0191b7e41434b90bb78"
   integrity sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==
 
 "@types/prop-types@*":
