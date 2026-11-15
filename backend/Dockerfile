@@ -14,7 +14,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
 
 
 # Final runtime stage
-FROM alpine:3.18 AS runtime
+FROM alpine:3.24 AS runtime
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 
