@@ -5,7 +5,7 @@ go 1.23.0
 require (
 	github.com/docker/docker v28.3.3+incompatible
 	github.com/swaggo/http-swagger v1.3.4
-	github.com/swaggo/swag v1.16.4
+	github.com/swaggo/swag v1.16.6
 	golang.org/x/sync v0.15.0
 )
 
